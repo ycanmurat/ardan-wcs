@@ -3,6 +3,10 @@
 A warehouse control system (WCS) concept for an automated pallet store, built end to end in .NET:
 a live simulation of the store, an HTTP and SignalR API, and an operator console in Blazor.
 
+Live Demo: https://ot3za7vkl6psnohzboiqkjms.hillbilisim.com
+
+Source Code: https://github.com/ycanmurat/ardan-wcs
+
 The demo site is fictional: Glenmore Foods, a chilled distribution centre in Dundalk. Machine figures
 (speeds, loads, temperatures) follow public data sheets for pallet-shuttle systems. Not affiliated with any vendor.
 
