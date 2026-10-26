@@ -1,0 +1,108 @@
+@{
+    var series = Series();
+    var top = TopOf(series);
+}
+<div class="chart" style="aspect-ratio: @Display.Num(Width) / @Display.Num(Height)" @onmouseleave="() => _hover = null">
+    <svg class="chart-svg" viewBox="0 0 @Display.Num(Width) @Display.Num(Height)" preserveAspectRatio="none"
+         role="img" aria-label="Pallets per hour over the last 60 minutes">
+        @foreach (var tick in Ticks(top))
+        {
+            <line class="chart-grid" x1="@Display.Num(Left)" x2="@Display.Num(Width - Right)" y1="@Display.Num(Y(tick, top))" y2="@Display.Num(Y(tick, top))" />
+        }
+        <path class="chart-area" d="@Area(series, top)" />
+        <path class="chart-line is-in" d="@Line(series, point => point.In, top)" />
+        <path class="chart-line is-out" d="@Line(series, point => point.Out, top)" />
+        @if (_hover is { } shown && shown < series.Count)
+        {
+            <line class="chart-cursor" x1="@Display.Num(X(shown))" x2="@Display.Num(X(shown))" y1="@Display.Num(Pad)" y2="@Display.Num(Height - Bottom)" />
+        }
+        @for (var i = 0; i < series.Count; i++)
+        {
+            var index = i;
+            <rect class="chart-hit" x="@Display.Num(X(index) - Step / 2)" y="0" width="@Display.Num(Step)" height="@Display.Num(Height)"
+                  @onmouseover="() => _hover = index" />
+        }
+    </svg>
+    @foreach (var tick in Ticks(top))
+    {
+        <span class="chart-y" style="top: @Pct(Y(tick, top), Height)">@tick</span>
+    }
+    @foreach (var (index, label) in XLabels)
+    {
+        <span class="chart-x" style="left: @Pct(X(index), Width)">@label</span>
+    }
+    @if (_hover is { } hovered && hovered < series.Count)
+    {
+        var point = series[hovered];
+        <div class="chart-tip @(hovered > series.Count / 2 ? "is-left" : null)" style="left: @Pct(X(hovered), Width)">
+            <strong>@Display.Time(point.Minute)</strong>
+            <span><i class="key is-in"></i>@point.InCount stored · <i class="key is-out"></i>@point.OutCount dispatched</span>
+            <small>@Display.Num(point.In, "0")/h in and @Display.Num(point.Out, "0")/h out, 10-minute average</small>
+        </div>
+    }
+</div>
+
+@code {
+    private const double Width = 640;
+    private const double Height = 210;
+    private const double Left = 34;
+    private const double Right = 10;
+    private const double Pad = 12;
+    private const double Bottom = 26;
+    private const int Window = 10;
+    private const int Shown = 60;
+    private int? _hover;
+
+    [Parameter, EditorRequired] public IReadOnlyList<ThroughputPoint> Points { get; set; } = [];
+
+    private sealed record Rate(DateTimeOffset Minute, double In, double Out, int InCount, int OutCount);
+
+    private int ShownCount => Math.Min(Points.Count, Shown);
+
+    private double Step => (Width - Left - Right) / Math.Max(1, ShownCount - 1);
+
+    private IEnumerable<(int Index, string Label)> XLabels =>
+    [
+        (0, "−60 min"),
+        (15, "−45"),
+        (30, "−30"),
+        (45, "−15"),
+        (Math.Max(0, ShownCount - 1), "now"),
+    ];
+
+    private List<Rate> Series()
+    {
+        var series = new List<Rate>(ShownCount);
+        for (var index = Points.Count - ShownCount; index < Points.Count; index++)
+        {
+            var from = Math.Max(0, index - Window + 1);
+            var window = Points.Skip(from).Take(index - from + 1).ToList();
+            var perHour = 60.0 / window.Count;
+            var point = Points[index];
+            series.Add(new Rate(point.Minute, window.Sum(p => p.In) * perHour, window.Sum(p => p.Out) * perHour, point.In, point.Out));
+        }
+        return series;
+    }
+
+    private static int TopOf(List<Rate> series)
+    {
+        var highest = series.Count == 0 ? 0 : series.Max(rate => Math.Max(rate.In, rate.Out));
+        return Math.Max(60, (int)Math.Ceiling(highest / 30) * 30);
+    }
+
+    private static IEnumerable<int> Ticks(int top) => [0, top / 2, top];
+
+    private double X(int index) => Left + index * Step;
+
+    private static double Y(double value, int top) => Height - Bottom - value / top * (Height - Bottom - Pad);
+
+    private string Line(List<Rate> series, Func<Rate, double> pick, int top) =>
+        string.Join(' ', series.Select((rate, index) => $"{(index == 0 ? 'M' : 'L')}{Display.Num(X(index))},{Display.Num(Y(pick(rate), top))}"));
+
+    private string Area(List<Rate> series, int top) =>
+        series.Count == 0
+            ? ""
+            : $"{Line(series, rate => rate.In, top)} L{Display.Num(X(series.Count - 1))},{Display.Num(Height - Bottom)} L{Display.Num(X(0))},{Display.Num(Height - Bottom)} Z";
+
+    private static string Pct(double value, double total) => $"{Display.Num(value / total * 100, "0.###")}%";
+}

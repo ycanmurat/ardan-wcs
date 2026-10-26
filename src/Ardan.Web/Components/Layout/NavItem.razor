@@ -1,0 +1,22 @@
+<NavLink class="nav-item" href="@Href" Match="@(Exact ? NavLinkMatch.All : NavLinkMatch.Prefix)" ActiveClass="is-active">
+    <Icon Name="@Icon" Size="18" />
+    <span class="nav-label">@Label</span>
+    @if (Count > 0)
+    {
+        <span class="nav-count tone-@Tone">@Count</span>
+    }
+    @if (Tag is not null)
+    {
+        <span class="nav-tag">@Tag</span>
+    }
+</NavLink>
+
+@code {
+    [Parameter, EditorRequired] public string Href { get; set; } = "";
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public int Count { get; set; }
+    [Parameter] public string Tone { get; set; } = "neutral";
+    [Parameter] public string? Tag { get; set; }
+    [Parameter] public bool Exact { get; set; }
+}

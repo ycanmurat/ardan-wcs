@@ -1,0 +1,31 @@
+<div class="segmented @Class" role="radiogroup" aria-label="@Label">
+    @foreach (var choice in Choices)
+    {
+        var selected = choice.Value == Value;
+        RenderFragment button = @<button type="button" role="radio" aria-checked="@(selected ? "true" : "false")"
+                                         class="segment @(selected ? "is-active" : null)" @onclick="() => SelectAsync(choice.Value)">@choice.Label</button>;
+        if (choice.Hint is null)
+        {
+            @button
+        }
+        else
+        {
+            <Tip Text="@choice.Hint" Side="bottom">@button</Tip>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<Choice> Choices { get; set; } = [];
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private async Task SelectAsync(string value)
+    {
+        if (value == Value) return;
+        Value = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+}

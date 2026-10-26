@@ -1,0 +1,23 @@
+﻿@page "/error"
+@using System.Diagnostics
+
+<PageTitle>Error · Ardán</PageTitle>
+
+<h1 class="sr-only">Something went wrong</h1>
+<div class="card page-message">
+    <EmptyState Icon="warning" Tone="crit" Title="Something went wrong" Text="The screen hit an error. The store keeps running; only this page stopped.">
+        @if (RequestId is not null)
+        {
+            <p class="muted">Reference for support: <code>@RequestId</code></p>
+        }
+        <a class="btn btn-primary" href="">Back to the overview</a>
+    </EmptyState>
+</div>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+
+    protected override void OnInitialized() => RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

@@ -1,0 +1,50 @@
+@{
+    var g = new RackGeometry(Levels, Bays);
+    var top = g.FloorY(Levels);
+}
+<svg class="rack-frame" viewBox="0 0 @N(g.Width) @N(g.Height)" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    <rect class="dock" x="@N(g.DockLeft)" y="@N(top)" width="@N(RackGeometry.BayWidth)" height="@N(g.Ground - top)" rx="4" />
+    @for (var shaft = 0; shaft < 2; shaft++)
+    {
+        var left = g.ShaftCentre(shaft) - RackGeometry.ShaftWidth / 2;
+        <rect class="shaft" x="@N(left)" y="@N(top - 8)" width="@N(RackGeometry.ShaftWidth)" height="@N(g.Ground - top + 8)" rx="5" />
+        <line class="shaft-guide" x1="@N(left + 5)" x2="@N(left + 5)" y1="@N(top - 4)" y2="@N(g.Ground)" />
+        <line class="shaft-guide" x1="@N(left + 35)" x2="@N(left + 35)" y1="@N(top - 4)" y2="@N(g.Ground)" />
+    }
+    @for (var bay = 0; bay <= Bays; bay++)
+    {
+        var x = g.RackLeft + bay * RackGeometry.BayWidth;
+        <line class="upright" x1="@N(x)" x2="@N(x)" y1="@N(top)" y2="@N(g.Ground)" />
+    }
+    @for (var level = 0; level < Levels; level++)
+    {
+        <line class="rail" x1="@N(g.DockLeft + 2)" x2="@N(g.RackRight)" y1="@N(g.RailY(level))" y2="@N(g.RailY(level))" />
+        <rect class="charger" x="@N(g.DockLeft + 3)" y="@N(g.RailY(level) - 19)" width="4" height="17" rx="1.5" />
+    }
+    <line class="ground" x1="@N(RackGeometry.LabelWidth)" x2="@N(g.RackRight)" y1="@N(g.Ground)" y2="@N(g.Ground)" />
+</svg>
+
+@for (var level = 0; level < Levels; level++)
+{
+    <span class="rack-label is-level" style="@g.Spot(RackGeometry.LabelWidth / 2, g.LevelMiddle(level))">L@(level)</span>
+}
+@for (var bay = 1; bay <= Bays; bay++)
+{
+    <span class="rack-label" style="@g.Spot(g.BayCentre(bay), RackGeometry.TopMargin / 2)">@bay</span>
+}
+<span class="rack-label is-strong" style="@g.Spot(g.BayCentre(0), RackGeometry.TopMargin / 2)">Dock</span>
+@for (var shaft = 0; shaft < 2; shaft++)
+{
+    <span class="rack-label is-strong" style="@g.Spot(g.ShaftCentre(shaft), g.Ground + 11)">V-@(shaft + 1)</span>
+}
+<span class="rack-label is-belt" style="@g.Spot(g.BeltLeft - 10, g.InfeedY + 7)">Infeed</span>
+<span class="rack-label is-belt" style="@g.Spot(g.BeltLeft - 10, g.OutfeedY + 7)">Outfeed</span>
+<span class="rack-label is-end" style="@g.Spot(g.BeltRight + 10, g.InfeedY + 7)">← from goods-in</span>
+<span class="rack-label is-end" style="@g.Spot(g.BeltRight + 10, g.OutfeedY + 7)">→ to docks 1–3</span>
+
+@code {
+    [Parameter, EditorRequired] public int Levels { get; set; }
+    [Parameter, EditorRequired] public int Bays { get; set; }
+
+    private static string N(double value) => Display.Num(value);
+}

@@ -1,0 +1,54 @@
+@inherits LiveComponent
+@inject UiState Ui
+@inject WcsApi Api
+
+<header class="topbar">
+    <button type="button" class="search-trigger" @onclick="Ui.OpenSearch">
+        <Icon Name="search" Size="16" />
+        <span>Search pallets, orders, products, machines</span>
+        <kbd>⌘K</kbd>
+    </button>
+
+    <div class="topbar-right">
+        @if (Live is { } live)
+        {
+            <Tip Title="System status" Text="@StatusHelp(live)" Side="bottom">
+                <span class="status-pill tone-@(live.Health.Level == HealthLevel.Running ? "ok" : "crit")">
+                    <i class="pulse"></i>@live.Health.Summary
+                </span>
+            </Tip>
+
+            <Tip Title="Store temperature" Text="Chilled store. The target is 0 to 5 °C. An alarm is raised above 5 °C." Side="bottom">
+                <span class="chip @(live.Climate.TemperatureC > live.Climate.MaxC ? "tone-warn" : null)">
+                    <Icon Name="thermometer" Size="15" />@Display.Num(live.Climate.TemperatureC, "0.0") °C
+                </span>
+            </Tip>
+
+            <div class="speed">
+                <span class="speed-label">Demo speed</span>
+                <Segmented Choices="Speeds" Value="@Display.Num(live.Speed)" ValueChanged="SetSpeedAsync" Label="Demo speed" />
+            </div>
+
+            <Tip Title="Site time" Text="Local time at the site in Dublin. In a faster demo the clock runs faster too." Side="bottom">
+                <span class="clock"><Icon Name="clock" Size="15" />@Display.Clock(live.Time)</span>
+            </Tip>
+        }
+        <button type="button" class="icon-btn" @onclick="Ui.ToggleHelp" aria-label="Help for this page"><Icon Name="help" /></button>
+    </div>
+</header>
+
+@code {
+    private static readonly IReadOnlyList<Choice> Speeds =
+    [
+        new("1", "1×", "Real time, as on a live site."),
+        new("2", "2×", "Twice as fast. Good for a walkthrough."),
+        new("5", "5×", "Five times as fast. Watch a whole shift in minutes."),
+    ];
+
+    private async Task SetSpeedAsync(string value) =>
+        Ui.Show(await Api.SetSpeedAsync(double.Parse(value, System.Globalization.CultureInfo.InvariantCulture)));
+
+    private static string StatusHelp(LiveSnapshot live) => live.Health.Level == HealthLevel.Running
+        ? "Every Taxi, VTU and conveyor can work. Warnings, if any, do not stop the store."
+        : "At least one machine has stopped. Open Alarms to see what happened and what to do.";
+}

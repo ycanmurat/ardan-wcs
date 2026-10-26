@@ -1,0 +1,18 @@
+@inherits LiveComponent
+
+@if (Feed.Status != FeedStatus.Live)
+{
+    <div class="banner tone-@(Feed.Status == FeedStatus.Offline ? "crit" : "warn")" role="status">
+        <Icon Name="@(Feed.Status == FeedStatus.Offline ? "warning" : "reset")" Size="16" />
+        <span>@Message</span>
+    </div>
+}
+
+@code {
+    private string Message => Feed.Status switch
+    {
+        FeedStatus.Connecting => "Connecting to the control server…",
+        FeedStatus.Reconnecting => "Connection lost. Reconnecting to the control server…",
+        _ => "Can't reach the control server. Start the API (dotnet run in src/Ardan.Api) and this page updates by itself.",
+    };
+}

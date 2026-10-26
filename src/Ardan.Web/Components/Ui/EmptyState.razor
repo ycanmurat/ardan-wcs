@@ -1,0 +1,14 @@
+<div class="empty">
+    <span class="empty-icon tone-@Tone"><Icon Name="@Icon" Size="22" /></span>
+    <strong>@Title</strong>
+    <p>@Text</p>
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "check";
+    [Parameter] public string Tone { get; set; } = "ok";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

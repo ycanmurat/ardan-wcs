@@ -1,0 +1,412 @@
+@page "/orders"
+@inherits LiveComponent
+@inject WcsApi Api
+@inject UiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>Orders · Ardán</PageTitle>
+
+<PageHeader Title="Orders" Subtitle="@Subtitle">
+    <button type="button" class="btn btn-primary" @onclick="OpenFormAsync"><Icon Name="plus" Size="16" />New order</button>
+</PageHeader>
+
+<section class="card">
+    @{
+        var rows = Rows;
+    }
+    <div class="toolbar">
+        <Segmented Choices="Views" Value="@_view" ValueChanged="SetView" Label="Which orders" />
+        <Segmented Choices="Types" Value="@_type" ValueChanged="SetType" Label="Order type" />
+        <label class="search-field">
+            <Icon Name="search" Size="15" />
+            <input class="input" placeholder="Filter by order, reference or product" @bind="_filter" @bind:event="oninput" aria-label="Filter orders" />
+        </label>
+    </div>
+
+    @if (!_loaded)
+    {
+        <Waiting Text="Loading orders…" />
+    }
+    else if (rows.Count == 0)
+    {
+        <EmptyState Icon="orders" Tone="neutral" Title="No orders match" Text="Try another filter, or create an order with New order." />
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="table is-clickable">
+                <thead>
+                    <tr>
+                        <th>Order</th>
+                        <th>Product</th>
+                        <th>Progress <InfoTip Title="Progress" Text="Dark: pallets at the dock or stored. Light: pallets on the move now." Side="bottom" /></th>
+                        <th>To / from</th>
+                        <th>Priority</th>
+                        <th>Status</th>
+                        <th>Due</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var order in rows)
+                    {
+                        var open = IsOpen(order);
+                        <tr @key="order.Id" class="@(order.Id == Select ? "is-selected" : null)" @onclick="() => Open(order.Id)">
+                            <td>
+                                <span class="order-id">
+                                    <Icon Name="@(order.Type == OrderType.Outbound ? "arrow-up" : "arrow-down")" Size="14" Class="@($"dir {order.Type.ToString().ToLowerInvariant()}")" />
+                                    <strong>@order.Id</strong>
+                                </span>
+                                <span class="sub">@order.Reference</span>
+                            </td>
+                            <td>@order.SkuName<span class="sub">@order.SkuCode</span></td>
+                            <td class="cell-progress">
+                                <ProgressBar Value="order.Done" Pending="order.InFlight" Max="order.Quantity" Tone="@(order.Status == OrderStatus.Completed ? "ok" : "brand")" />
+                                <span class="sub">@order.Done of @order.Quantity</span>
+                            </td>
+                            <td>@(order.Type == OrderType.Outbound ? $"Dock {order.Dock}" : "Infeed")</td>
+                            <td><StateBadge Look="Display.Look(order.Priority)" /></td>
+                            <td><StateBadge Look="Display.Look(order.Status)" /></td>
+                            <td class="@(open && order.DueAt < Now ? "is-late" : null)">@When(order)</td>
+                            <td class="muted">@order.Source</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<Drawer Open="SelectedOrder is not null" Kicker="@(SelectedOrder?.Type == OrderType.Inbound ? "Inbound order" : "Outbound order")"
+        Title="@(SelectedOrder?.Id ?? "")" Subtitle="@(SelectedOrder is { } shown ? $"{shown.Reference} · from {shown.Source}" : null)" OnClose="Close">
+    <ChildContent>
+        @if (SelectedOrder is { } order)
+        {
+            var open = IsOpen(order);
+            <div class="drawer-state">
+                <StateBadge Look="Display.Look(order.Status)" Side="bottom" />
+                <StateBadge Look="Display.Look(order.Priority)" Side="bottom" />
+            </div>
+            if (order.Note is not null)
+            {
+                <p class="note tone-@(order.Status == OrderStatus.Exception ? "warn" : "info")"><Icon Name="info" Size="16" />@order.Note</p>
+            }
+            <div class="big-progress">
+                <ProgressBar Value="order.Done" Pending="order.InFlight" Max="order.Quantity" Tone="@(order.Status == OrderStatus.Completed ? "ok" : "brand")" />
+                <span><strong>@order.Done of @order.Quantity</strong> pallets @(order.Type == OrderType.Outbound ? "at the dock" : "stored")@(order.InFlight > 0 ? $" · {order.InFlight} on the move" : null)@(order.Rejected > 0 ? $" · {order.Rejected} rejected" : null)</span>
+            </div>
+            <dl class="facts">
+                <Fact Label="Product">@order.SkuName (@order.SkuCode)</Fact>
+                <Fact Label="Pallets">@order.Quantity</Fact>
+                <Fact Label="@(order.Type == OrderType.Outbound ? "Dock" : "Arrives on")">@(order.Type == OrderType.Outbound ? $"Dock {order.Dock}" : "Infeed")</Fact>
+                <Fact Label="Created">@Display.Date(order.CreatedAt)</Fact>
+                <Fact Label="Due">@Display.Date(order.DueAt)@(open ? $" · {Display.Due(order.DueAt, Now)}" : null)</Fact>
+                @if (order.CompletedAt is { } completed)
+                {
+                    <Fact Label="@(order.Status == OrderStatus.Cancelled ? "Cancelled" : "Finished")">@Display.Date(completed)</Fact>
+                }
+            </dl>
+            if (open)
+            {
+                <h3 class="drawer-section">Priority <InfoTip Title="Priority" Text="Urgent and high orders get Taxis first. Within a priority, the earliest due time goes first." /></h3>
+                <Segmented Choices="Priorities" Value="@order.Priority.ToString()" ValueChanged="value => SetPriorityAsync(order, value)" Label="Priority" />
+            }
+        }
+    </ChildContent>
+    <Footer>
+        @if (SelectedOrder is { } order && IsOpen(order))
+        {
+            <button type="button" class="btn btn-danger" @onclick="() => ConfirmCancel(order)"><Icon Name="x" Size="16" />Cancel order</button>
+        }
+        else
+        {
+            <span class="muted">This order is closed.</span>
+        }
+    </Footer>
+</Drawer>
+
+<Drawer Open="_formOpen" Kicker="New order" Title="Create an order" Subtitle="It goes straight to the control system, as if it came from the ERP." OnClose="CloseForm">
+    <ChildContent>
+        <form id="new-order" class="form" @onsubmit="CreateAsync">
+            <div class="form-row">
+                <span class="form-label">Type</span>
+                <Segmented Choices="OrderTypes" Value="@_draft.Type.ToString()" ValueChanged="SetDraftType" Label="Order type" />
+                <span class="form-hint">@(_draft.Type == OrderType.Outbound ? "Send pallets from store to a dock." : "Receive pallets from goods-in into store.")</span>
+            </div>
+            <label class="form-row">
+                <span class="form-label">Product</span>
+                <select class="input" @bind="_draft.SkuCode">
+                    <option value="">Choose a product</option>
+                    @foreach (var sku in _skus)
+                    {
+                        <option value="@sku.Code">@sku.Name · @sku.Code@(_draft.Type == OrderType.Outbound ? $" · {sku.Free} free" : null)</option>
+                    }
+                </select>
+                @if (DraftSku is { } chosen)
+                {
+                    <span class="form-hint">@chosen.Pallets in store, @chosen.Free free to send. @Display.Look(chosen.Velocity).Label mover.</span>
+                }
+            </label>
+            <div class="form-row">
+                <span class="form-label">Pallets</span>
+                <div class="stepper">
+                    <button type="button" class="icon-btn" @onclick="() => StepQuantity(-1)" aria-label="One pallet fewer"><Icon Name="minus" /></button>
+                    <input class="input" type="number" min="1" max="@Limits.MaxPalletsPerOrder" @bind="_draft.Quantity" aria-label="Number of pallets" />
+                    <button type="button" class="icon-btn" @onclick="() => StepQuantity(1)" aria-label="One pallet more"><Icon Name="plus" /></button>
+                </div>
+                <span class="form-hint">From 1 to @Limits.MaxPalletsPerOrder pallets. One pallet weighs up to 1,500 kg.</span>
+            </div>
+            @if (_draft.Type == OrderType.Outbound)
+            {
+                <div class="form-row">
+                    <span class="form-label">Dock</span>
+                    <Segmented Choices="Docks" Value="@_draft.Dock.ToString()" ValueChanged="value => _draft.Dock = int.Parse(value)" Label="Dock" />
+                </div>
+            }
+            <div class="form-row">
+                <span class="form-label">Priority</span>
+                <Segmented Choices="Priorities" Value="@_draft.Priority.ToString()" ValueChanged="value => _draft.Priority = Enum.Parse<Priority>(value)" Label="Priority" />
+            </div>
+            <div class="form-row">
+                <span class="form-label">Due in</span>
+                <Segmented Choices="DueTimes" Value="@_draft.DueInMinutes.ToString()" ValueChanged="value => _draft.DueInMinutes = int.Parse(value)" Label="Due in" />
+            </div>
+            @if (Problem is { } problem)
+            {
+                <p class="note tone-warn"><Icon Name="info" Size="16" />@problem</p>
+            }
+            else
+            {
+                <p class="note tone-ok"><Icon Name="check" Size="16" />@DraftSummary</p>
+            }
+        </form>
+    </ChildContent>
+    <Footer>
+        <button type="button" class="btn" @onclick="CloseForm">Cancel</button>
+        <button type="submit" form="new-order" class="btn btn-primary" disabled="@(Problem is not null || _saving)">Create order</button>
+    </Footer>
+</Drawer>
+
+<ConfirmDialog Request="_confirm" OnClose="() => _confirm = null" />
+
+@code {
+    private static readonly IReadOnlyList<Choice> Views =
+    [
+        new("open", "Open", "Orders still being worked on."),
+        new("closed", "Finished", "Completed and cancelled orders."),
+        new("all", "All"),
+    ];
+
+    private static readonly IReadOnlyList<Choice> Types =
+    [
+        new("all", "All types"),
+        new(nameof(OrderType.Outbound), "Outbound", "Store to dock."),
+        new(nameof(OrderType.Inbound), "Inbound", "Goods-in to store."),
+    ];
+
+    private static readonly IReadOnlyList<Choice> OrderTypes =
+    [
+        new(nameof(OrderType.Outbound), "Outbound", "Send pallets to a dock."),
+        new(nameof(OrderType.Inbound), "Inbound", "Receive pallets into store."),
+    ];
+
+    private static readonly IReadOnlyList<Choice> Priorities =
+    [
+        new(nameof(Priority.Normal), "Normal", "Served in due-time order."),
+        new(nameof(Priority.High), "High", "Served before normal orders."),
+        new(nameof(Priority.Urgent), "Urgent", "Served before everything else."),
+    ];
+
+    private static readonly IReadOnlyList<Choice> Docks =
+        Enumerable.Range(1, Limits.Docks).Select(dock => new Choice(dock.ToString(), $"Dock {dock}")).ToList();
+
+    private static readonly IReadOnlyList<Choice> DueTimes =
+    [
+        new("15", "15 min"),
+        new("30", "30 min"),
+        new("60", "1 hour"),
+        new("120", "2 hours"),
+    ];
+
+    private IReadOnlyList<OrderView> _orders = [];
+    private IReadOnlyList<SkuView> _skus = [];
+    private string _view = "open";
+    private string _type = "all";
+    private string _filter = "";
+    private bool _loaded;
+    private bool _formOpen;
+    private bool _saving;
+    private Draft _draft = new();
+    private Confirmation? _confirm;
+    private string? _formFor;
+
+    [SupplyParameterFromQuery(Name = "select")] public string? Select { get; set; }
+
+    [SupplyParameterFromQuery(Name = "new")] public string? NewFor { get; set; }
+
+    private sealed class Draft
+    {
+        public OrderType Type { get; set; } = OrderType.Outbound;
+        public string SkuCode { get; set; } = "";
+        public int Quantity { get; set; } = 2;
+        public int Dock { get; set; } = 1;
+        public Priority Priority { get; set; } = Priority.Normal;
+        public int DueInMinutes { get; set; } = 60;
+    }
+
+    protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(2);
+
+    private OrderView? SelectedOrder => Select is null ? null : _orders.FirstOrDefault(order => order.Id.Equals(Select, StringComparison.OrdinalIgnoreCase));
+
+    private SkuView? DraftSku => _skus.FirstOrDefault(sku => sku.Code == _draft.SkuCode);
+
+    private string Subtitle => Live?.Orders is { } counts
+        ? $"{counts.Open} open · {counts.Outbound} outbound · {counts.Inbound} inbound{(counts.Exceptions > 0 ? $" · {counts.Exceptions} need attention" : null)}"
+        : "Work from the ERP, plus any orders you add here.";
+
+    private List<OrderView> Rows
+    {
+        get
+        {
+            var rows = _orders.Where(order => _view switch
+            {
+                "open" => IsOpen(order),
+                "closed" => !IsOpen(order),
+                _ => true,
+            });
+            if (_type != "all") rows = rows.Where(order => order.Type.ToString() == _type);
+            if (_filter.Trim() is { Length: > 0 } text)
+            {
+                rows = rows.Where(order =>
+                    order.Id.Contains(text, StringComparison.OrdinalIgnoreCase)
+                    || order.Reference.Contains(text, StringComparison.OrdinalIgnoreCase)
+                    || order.SkuName.Contains(text, StringComparison.OrdinalIgnoreCase)
+                    || order.SkuCode.Contains(text, StringComparison.OrdinalIgnoreCase));
+            }
+            return _view switch
+            {
+                "open" => rows.OrderByDescending(order => order.Priority).ThenBy(order => order.DueAt).ToList(),
+                "closed" => rows.OrderByDescending(order => order.CompletedAt).ToList(),
+                _ => rows.OrderByDescending(order => order.CreatedAt).ToList(),
+            };
+        }
+    }
+
+    private string? Problem
+    {
+        get
+        {
+            if (DraftSku is not { } sku) return "Choose a product.";
+            if (_draft.Quantity is < 1 or > Limits.MaxPalletsPerOrder) return $"Choose between 1 and {Limits.MaxPalletsPerOrder} pallets.";
+            if (_draft.Type == OrderType.Outbound && sku.Free < _draft.Quantity)
+            {
+                return sku.Free == 0
+                    ? $"There is no free stock of {sku.Name} right now. Try an inbound order first."
+                    : $"Only {sku.Free} {(sku.Free == 1 ? "pallet" : "pallets")} of {sku.Name} {(sku.Free == 1 ? "is" : "are")} free to send.";
+            }
+            return null;
+        }
+    }
+
+    private string DraftSummary
+    {
+        get
+        {
+            var pallets = _draft.Quantity == 1 ? "1 pallet" : $"{_draft.Quantity} pallets";
+            var due = DueTimes.First(choice => choice.Value == _draft.DueInMinutes.ToString()).Label;
+            return _draft.Type == OrderType.Outbound
+                ? $"Send {pallets} of {DraftSku?.Name} to dock {_draft.Dock}, due in {due}."
+                : $"Receive {pallets} of {DraftSku?.Name} into store, due in {due}.";
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (NewFor == _formFor) return;
+        _formFor = NewFor;
+        if (NewFor is null) return;
+        await OpenFormAsync();
+        _draft.SkuCode = NewFor;
+    }
+
+    protected override Task OnLiveAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _orders = await Api.OrdersAsync("all");
+        _loaded = true;
+    }
+
+    private static bool IsOpen(OrderView order) =>
+        order.Status is OrderStatus.Queued or OrderStatus.InProgress or OrderStatus.Short or OrderStatus.Exception;
+
+    private string When(OrderView order) => order.CompletedAt is { } completed && !IsOpen(order)
+        ? $"{(order.Status == OrderStatus.Cancelled ? "Cancelled" : "Done")} {Display.Time(completed)}"
+        : Display.Due(order.DueAt, Now);
+
+    private void SetView(string value) => _view = value;
+
+    private void SetType(string value) => _type = value;
+
+    private void Open(string id) => Nav.NavigateTo($"orders?select={id}", replace: true);
+
+    private void Close() => Nav.NavigateTo("orders", replace: true);
+
+    private async Task SetPriorityAsync(OrderView order, string value)
+    {
+        Ui.Show(await Api.SetPriorityAsync(order.Id, Enum.Parse<Priority>(value)));
+        await LoadAsync();
+    }
+
+    private void ConfirmCancel(OrderView order) => _confirm = new(
+        $"Cancel {order.Id}?",
+        order.InFlight > 0
+            ? $"No new work starts. {order.InFlight} {(order.InFlight == 1 ? "pallet is" : "pallets are")} already on the move and finish their trip."
+            : "No new work starts and the order closes now.",
+        "Cancel order",
+        async () =>
+        {
+            Ui.Show(await Api.CancelOrderAsync(order.Id));
+            await LoadAsync();
+        },
+        "danger");
+
+    private async Task OpenFormAsync()
+    {
+        _draft = new Draft();
+        _formOpen = true;
+        _skus = await Api.SkusAsync();
+    }
+
+    private void CloseForm()
+    {
+        _formOpen = false;
+        if (NewFor is not null) Nav.NavigateTo("orders", replace: true);
+    }
+
+    private void SetDraftType(string value) => _draft.Type = Enum.Parse<OrderType>(value);
+
+    private void StepQuantity(int step) => _draft.Quantity = Math.Clamp(_draft.Quantity + step, 1, Limits.MaxPalletsPerOrder);
+
+    private async Task CreateAsync()
+    {
+        if (Problem is not null || _saving) return;
+        _saving = true;
+        try
+        {
+            var result = await Api.CreateOrderAsync(new NewOrder(_draft.Type, _draft.SkuCode, _draft.Quantity, _draft.Dock, _draft.Priority, _draft.DueInMinutes));
+            Ui.Show(result);
+            if (!result.Ok) return;
+            _formOpen = false;
+            _view = "open";
+            await LoadAsync();
+            if (result.Ref is not null) Open(result.Ref);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

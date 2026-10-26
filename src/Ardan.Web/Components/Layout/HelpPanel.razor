@@ -1,0 +1,52 @@
+@implements IDisposable
+@inject UiState Ui
+@inject NavigationManager Nav
+
+@if (Ui.HelpOpen)
+{
+    var topic = HelpContent.For(PageKey);
+    <aside class="help" role="complementary" aria-label="Help for this page">
+        <header class="help-head">
+            <div>
+                <span class="drawer-kicker">Help</span>
+                <h2>@topic.Title</h2>
+            </div>
+            <button type="button" class="icon-btn" @onclick="Ui.ToggleHelp" aria-label="Close help"><Icon Name="x" /></button>
+        </header>
+        <p class="help-intro">@topic.Intro</p>
+        <ol class="help-points">
+            @foreach (var point in topic.Points)
+            {
+                <li>@point</li>
+            }
+        </ol>
+        <h3>Shortcuts</h3>
+        <dl class="help-keys">
+            @foreach (var (keys, action) in HelpContent.Shortcuts)
+            {
+                <div><dt><kbd>@keys</kbd></dt><dd>@action</dd></div>
+            }
+        </dl>
+        <p class="help-foot">Every ⓘ on the screen explains the number or state next to it.</p>
+    </aside>
+}
+
+@code {
+    private string PageKey => Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#', '/')[0];
+
+    protected override void OnInitialized()
+    {
+        Ui.Changed += Redraw;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => Redraw();
+
+    private void Redraw() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Ui.Changed -= Redraw;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}

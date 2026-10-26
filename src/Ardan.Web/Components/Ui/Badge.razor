@@ -1,0 +1,14 @@
+<span class="badge tone-@Tone @Class">
+    @if (Dot)
+    {
+        <i class="badge-dot"></i>
+    }
+    @Text
+</span>
+
+@code {
+    [Parameter] public string Text { get; set; } = "";
+    [Parameter] public string Tone { get; set; } = "neutral";
+    [Parameter] public bool Dot { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+}

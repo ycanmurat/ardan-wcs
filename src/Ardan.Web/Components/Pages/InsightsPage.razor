@@ -1,0 +1,147 @@
+@page "/insights"
+
+<PageTitle>Insights · Ardán</PageTitle>
+
+<PageHeader Title="Insights" Subtitle="AI-assisted features planned for the next phase. They read the same data as these screens and never move a pallet on their own.">
+    <Badge Text="Planned · phase 2" Tone="brand" />
+</PageHeader>
+
+<section class="card ask-preview">
+    <div class="ask-head">
+        <span class="ask-icon"><Icon Name="chat" Size="20" /></span>
+        <div>
+            <h2>Ask the store</h2>
+            <p class="muted">Plain-English questions, answered from live data, with links to the records behind each answer.</p>
+        </div>
+    </div>
+    <div class="ask-box" aria-disabled="true">
+        <Icon Name="search" Size="16" />
+        <span>Ask about stock, orders, Taxis or alarms…</span>
+        <Badge Text="Not connected yet" Tone="neutral" Dot="false" />
+    </div>
+    <div class="ask-examples">
+        @foreach (var question in Questions)
+        {
+            <span class="chip">@question</span>
+        }
+    </div>
+</section>
+
+<div class="feature-grid">
+    @foreach (var feature in Features)
+    {
+        <article class="card feature">
+            <header class="feature-head">
+                <span class="feature-icon"><Icon Name="@feature.Icon" Size="20" /></span>
+                <div>
+                    <h2>@feature.Title</h2>
+                    <p>@feature.Promise</p>
+                </div>
+            </header>
+            <dl class="feature-facts">
+                <div><dt>What it does</dt><dd>@feature.Does</dd></div>
+                <div><dt>How it works</dt><dd>@feature.How</dd></div>
+                <div><dt>Data it reads</dt><dd>@feature.Data</dd></div>
+                <div><dt>Safety</dt><dd>@feature.Guardrail</dd></div>
+            </dl>
+            <footer class="feature-foot">
+                <Badge Text="@feature.Stage" Tone="neutral" />
+            </footer>
+        </article>
+    }
+</div>
+
+<section class="card">
+    <CardHeader Title="How it fits in" Help="The AI service sits beside the control system, not inside it. If it is down, the store runs exactly as it does today." />
+    <div class="flow">
+        <div class="flow-node">
+            <Icon Name="user" />
+            <strong>Shift lead</strong>
+            <span>Asks a question or reviews a proposal in Ardán</span>
+        </div>
+        <span class="flow-arrow" aria-hidden="true"><Icon Name="arrow-right" /></span>
+        <div class="flow-node is-brand">
+            <Icon Name="insights" />
+            <strong>Insights service</strong>
+            <span>.NET service. Plans the steps and calls the model through one gateway</span>
+        </div>
+        <span class="flow-arrow" aria-hidden="true"><Icon Name="arrow-right" /></span>
+        <div class="flow-stack">
+            <div class="flow-node">
+                <Icon Name="link" />
+                <strong>Read-only tools</strong>
+                <span>The same WCS API these screens use: search, orders, lanes, pallets, alarms</span>
+            </div>
+            <div class="flow-node">
+                <Icon Name="database" />
+                <strong>Knowledge index</strong>
+                <span>Alarm history, maintenance notes and machine manuals</span>
+            </div>
+        </div>
+        <span class="flow-arrow" aria-hidden="true"><Icon Name="arrow-right" /></span>
+        <div class="flow-node is-guard">
+            <Icon Name="shield" />
+            <strong>Approval queue</strong>
+            <span>Proposed moves wait for a supervisor, then run as normal low-priority jobs</span>
+        </div>
+    </div>
+</section>
+
+<section class="card">
+    <CardHeader Title="Ground rules" Help="These hold for every AI feature, from the first pilot onwards." />
+    <ul class="rules">
+        @foreach (var (title, text) in Rules)
+        {
+            <li><Icon Name="check" Size="16" /><div><strong>@title</strong><span>@text</span></div></li>
+        }
+    </ul>
+</section>
+
+@code {
+    private sealed record Feature(string Icon, string Title, string Promise, string Does, string How, string Data, string Guardrail, string Stage);
+
+    private static readonly IReadOnlyList<string> Questions =
+    [
+        "Which cheddar batches are best before this week, and where are they?",
+        "Why is OUT-88231 running late?",
+        "How many pallets went to dock 2 since 6 am?",
+        "Which Taxi stopped most often this week?",
+    ];
+
+    private static readonly IReadOnlyList<Feature> Features =
+    [
+        new("chat", "Ask the store", "Answers in seconds, without building a report.",
+            "Answers questions about stock, orders, machines and alarms in plain English, with links to the records it used.",
+            "A language model calls read-only tools on the WCS API, then writes the answer from what the tools returned.",
+            "Live snapshot, orders, pallets and their movement history, alarms.",
+            "Read-only tools only. It cannot create, change or cancel anything.",
+            "Design ready · first pilot"),
+        new("wrench", "Alarm guide", "Faster fixes, using what worked last time.",
+            "When an alarm is raised, it shows similar past alarms, how they were fixed and how long that took, plus the right page of the manual.",
+            "Search over alarm history and maintenance notes, then a short summary. Ranked by code, machine and level.",
+            "Alarm history, reset times, maintenance notes, machine manuals.",
+            "Advice only. The safety steps and reset buttons stay exactly as they are.",
+            "Design ready"),
+        new("layers", "Slotting advisor", "Better lanes, moved in quiet hours.",
+            "Proposes housekeeping moves: merge part-full lanes of one batch, bring fast movers closer to the VTUs, free lanes before a big delivery.",
+            "An optimiser scores each move by Taxi time saved against Taxi time used. The model explains each proposal in one sentence.",
+            "Lane contents, product velocity, order forecast from the ERP.",
+            "A supervisor approves every batch. Moves run as low-priority jobs and give way to orders.",
+            "Needs order history"),
+        new("gauge", "Fleet health forecast", "Spot wear before it stops a Taxi.",
+            "Flags Taxis and VTUs that drift from the fleet's normal: longer charge times, hotter motors, more obstacle stops on one level.",
+            "Trend and anomaly checks on machine telemetry, with a weekly plain-English note for the maintenance team.",
+            "Battery, motor temperature, Wi-Fi signal, stops and resets per machine.",
+            "Advice only. It never takes a machine out of service by itself.",
+            "Needs 3 months of telemetry"),
+    ];
+
+    private static readonly IReadOnlyList<(string Title, string Text)> Rules =
+    [
+        ("A person decides", "Anything that would move a pallet or change an order needs a named person to approve it."),
+        ("Every answer shows its sources", "Answers link to the orders, pallets, lanes or alarms they are based on, so they can be checked."),
+        ("Site data stays private", "The model is reached through one gateway that can point at a hosted or an on-site model. Site data is not used for training."),
+        ("Everything is logged", "Questions, tool calls and approvals go into the same journal as the store's own events."),
+        ("Fails safe", "If the AI service is slow or down, the control system carries on exactly as before."),
+    ];
+}

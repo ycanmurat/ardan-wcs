@@ -1,0 +1,10 @@
+<span class="signal @(Bars < 3 ? "is-weak" : null)" aria-label="Wi-Fi signal @Bars of 4">
+    @for (var bar = 1; bar <= 4; bar++)
+    {
+        <i class="@(bar <= Bars ? "is-on" : null)" style="height: @(bar * 3 + 2)px"></i>
+    }
+</span>
+
+@code {
+    [Parameter] public int Bars { get; set; }
+}

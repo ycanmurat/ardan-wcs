@@ -1,0 +1,67 @@
+<button type="button" class="lane @Classes" style="@Box" aria-label="@Label" @onclick="SelectAsync">
+    <span class="pips tone-@(Tone ?? "none")">
+        @for (var place = 0; place < Lane.Depth; place++)
+        {
+            <i class="@(place < Lane.Count ? "is-on" : null)"></i>
+        }
+    </span>
+    <span class="marker-tip">
+        <strong>@Name</strong>
+        @if (Lane.SkuName is null)
+        {
+            <span>Empty. Ready for a new batch.</span>
+        }
+        else
+        {
+            <span>@Lane.SkuName</span>
+            <span class="muted">@Lane.Count of @Lane.Depth places · batch @Lane.Batch</span>
+            @if (Lane.Expiry is { } expiry)
+            {
+                <span class="muted">Best before @Display.Day(expiry)</span>
+            }
+        }
+        @if (Lane.Busy)
+        {
+            <span class="tip-note">A Taxi is on its way to this lane.</span>
+        }
+    </span>
+</button>
+
+@code {
+    private Drawn? _drawn;
+
+    [Parameter, EditorRequired] public LaneView Lane { get; set; } = default!;
+    [Parameter, EditorRequired] public string Box { get; set; } = "";
+    [Parameter] public string? Tone { get; set; }
+    [Parameter] public bool Highlight { get; set; }
+    [Parameter] public bool Dimmed { get; set; }
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public string? TipClass { get; set; }
+    [Parameter] public EventCallback<LaneView> OnSelect { get; set; }
+
+    private readonly record struct Drawn(int Version, string? Tone, bool Highlight, bool Dimmed, bool Selected);
+
+    private Drawn Current => new(Lane.Version, Tone, Highlight, Dimmed, Selected);
+
+    private string Name => $"L{Lane.Level}·B{Lane.Bay:00}";
+
+    private string Label => Lane.SkuName is null
+        ? $"Lane {Name}, empty"
+        : $"Lane {Name}, {Lane.SkuName}, {Lane.Count} of {Lane.Depth} pallets";
+
+    private string Classes => string.Join(' ', new[]
+    {
+        Lane.Count == 0 ? "is-empty" : null,
+        Lane.Busy ? "is-busy" : null,
+        Highlight ? "is-highlight" : null,
+        Dimmed ? "is-dim" : null,
+        Selected ? "is-selected" : null,
+        TipClass,
+    }.Where(name => name is not null));
+
+    protected override bool ShouldRender() => _drawn != Current;
+
+    protected override void OnAfterRender(bool firstRender) => _drawn = Current;
+
+    private Task SelectAsync() => OnSelect.InvokeAsync(Lane);
+}

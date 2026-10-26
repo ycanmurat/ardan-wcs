@@ -1,0 +1,8 @@
+<div class="waiting" role="status">
+    <span class="spinner" aria-hidden="true"></span>
+    <span>@Text</span>
+</div>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Waiting for live data from the control server…";
+}

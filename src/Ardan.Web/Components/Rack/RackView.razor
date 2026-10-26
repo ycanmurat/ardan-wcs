@@ -1,0 +1,153 @@
+@inherits LiveComponent
+
+@if (Feed.Layout is not { } layout || Live is not { } live)
+{
+    <Waiting />
+}
+else
+{
+    var g = GeometryFor(layout.Levels, layout.Bays);
+    <div class="rack-scroll">
+        <div class="rack">
+            <div class="rack-stage" style="aspect-ratio: @Display.Num(g.Width) / @Display.Num(g.Height); --units: @Display.Num(g.Width)">
+                <RackFrame Levels="g.Levels" Bays="g.Bays" />
+
+                @for (var level = 0; level < g.Levels; level++)
+                {
+                    var row = level;
+                    var busy = live.Taxis.Any(taxi => taxi.Level == row && taxi.X > 0.01 && !Riding(live, taxi.Id));
+                    <span class="aisle @(busy ? "is-busy" : null)" style="@g.Box(g.RackLeft, g.RailY(level) - 22, g.RackRight - g.RackLeft, 22)"></span>
+                }
+
+                @foreach (var lane in Feed.Lanes.OrderBy(lane => lane.Level).ThenBy(lane => lane.Bay))
+                {
+                    <LaneCell @key="lane.Level * 1000 + lane.Bay" Lane="lane" Box="@g.LaneBox(lane.Level, lane.Bay)" Tone="@ToneOf(lane)"
+                              Highlight="@(Product is not null && lane.SkuCode == Product)" Dimmed="@(Product is not null && lane.SkuCode != Product)"
+                              Selected="@(SelectedLane == (lane.Level, lane.Bay))" TipClass="@TipClass(g, lane.Level, lane.Bay)" OnSelect="OnLaneSelected" />
+                }
+
+                @foreach (var belt in live.Conveyors)
+                {
+                    var inbound = belt.Id == InfeedId;
+                    <span class="belt @(inbound ? "is-in" : "is-out") @(belt.State == ConveyorState.Jammed ? "is-jammed" : null)"
+                          style="@g.Belt(inbound ? g.InfeedY : g.OutfeedY)" tabindex="0" aria-label="@belt.Name">
+                        <span class="marker-tip">
+                            <strong>@belt.Name</strong>
+                            <span class="muted">@BeltHelp(belt, inbound)</span>
+                        </span>
+                    </span>
+                    foreach (var item in belt.Items)
+                    {
+                        <span @key="item.PalletId" class="parcel @(inbound ? "is-in" : "is-out")" style="@g.Parcel(inbound, item.Position, belt.Length)">
+                            <span class="marker-tip">
+                                <strong>@item.PalletId</strong>
+                                <span class="muted">@item.SkuCode on the @belt.Name.ToLowerInvariant()</span>
+                            </span>
+                        </span>
+                    }
+                }
+
+                <span class="gate" style="@g.Spot(g.GateX, g.InfeedY - 8)">
+                    <span class="marker-tip">
+                        <strong>Profile check</strong>
+                        <span class="muted">Height, weight and label are checked here. A pallet that fails goes to the reject lane.</span>
+                    </span>
+                </span>
+
+                @foreach (var lift in live.Lifts)
+                {
+                    var look = Display.Look(lift.State);
+                    <span @key="lift.Id" class="carriage tone-@look.Tone" style="@g.Carriage(lift.Shaft, lift.Position)">
+                        <span class="marker-tip tip-start @(lift.Position >= g.Levels - 1.5 ? "tip-below" : null)">
+                            <strong>@lift.Id · @look.Label</strong>
+                            <span>@lift.Activity</span>
+                            @if (lift.Waiting > 0)
+                            {
+                                <span class="muted">@lift.Waiting waiting for a ride</span>
+                            }
+                        </span>
+                    </span>
+                }
+
+                @foreach (var taxi in live.Taxis)
+                {
+                    var look = Display.Look(taxi.State);
+                    var ride = live.Lifts.FirstOrDefault(lift => lift.TaxiId == taxi.Id);
+                    var spot = ride is null ? g.TaxiAt(taxi.X, taxi.Level) : g.TaxiOnLift(ride.Shaft, ride.Position);
+                    var top = (ride?.Position ?? taxi.Level) >= g.Levels - 1.5;
+                    <button type="button" @key="taxi.Id" style="@spot" aria-label="@($"{taxi.Id}: {taxi.Activity}")"
+                            class="taxi tone-@look.Tone @(taxi.PalletId is null ? null : "is-loaded") @(taxi.Id == SelectedTaxi ? "is-selected" : null)"
+                            @onclick="() => OnTaxiSelected.InvokeAsync(taxi.Id)">
+                        <span class="taxi-load"></span>
+                        <span class="taxi-body">@taxi.Id[2..]</span>
+                        <span class="marker-tip @(top ? "tip-below" : null) @(ride is not null || taxi.X < 1 ? "tip-start" : taxi.X > g.Bays - 3 ? "tip-end" : null)">
+                            <strong>@taxi.Id · @look.Label</strong>
+                            <span>@taxi.Activity</span>
+                            <span class="muted">Battery @Display.Num(taxi.Battery, "0")% · level @taxi.Level</span>
+                        </span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const string InfeedId = "C-IN";
+    private RackGeometry? _geometry;
+
+    [Parameter] public LaneColour Colour { get; set; }
+    [Parameter] public string? Product { get; set; }
+    [Parameter] public (int Level, int Bay)? SelectedLane { get; set; }
+    [Parameter] public string? SelectedTaxi { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, Velocity>? Velocities { get; set; }
+    [Parameter] public EventCallback<LaneView> OnLaneSelected { get; set; }
+    [Parameter] public EventCallback<string> OnTaxiSelected { get; set; }
+
+    private RackGeometry GeometryFor(int levels, int bays)
+    {
+        if (_geometry is null || _geometry.Levels != levels || _geometry.Bays != bays) _geometry = new RackGeometry(levels, bays);
+        return _geometry;
+    }
+
+    private static bool Riding(LiveSnapshot live, string taxiId) => live.Lifts.Any(lift => lift.TaxiId == taxiId);
+
+    private static string? TipClass(RackGeometry g, int level, int bay) =>
+        string.Join(' ', new[]
+        {
+            level >= g.Levels - 1 ? "tip-below" : null,
+            bay <= 2 ? "tip-start" : bay >= g.Bays - 1 ? "tip-end" : null,
+        }.Where(name => name is not null));
+
+    private string? ToneOf(LaneView lane)
+    {
+        if (lane.Count == 0 || lane.SkuCode is null) return null;
+        var daysLeft = lane.Expiry is { } expiry ? Display.DaysLeft(expiry, Now) : int.MaxValue;
+        return Colour switch
+        {
+            LaneColour.Velocity when Velocities?.TryGetValue(lane.SkuCode, out var velocity) == true => $"v-{velocity.ToString().ToLowerInvariant()}",
+            LaneColour.Expiry => daysLeft switch
+            {
+                < 0 => "expired",
+                <= 3 => "soon",
+                <= 7 => "week",
+                _ => "fresh",
+            },
+            _ => daysLeft <= 3 ? "soon" : "fill",
+        };
+    }
+
+    private static string BeltHelp(ConveyorView belt, bool inbound)
+    {
+        if (belt.State == ConveyorState.Jammed) return "Stopped by a jam. Clear it and reset the conveyor from Fleet or Alarms.";
+        var load = belt.Items.Count switch
+        {
+            0 => "Empty right now.",
+            1 => "1 pallet on it.",
+            var count => $"{count} pallets on it.",
+        };
+        return inbound
+            ? $"Brings pallets from goods-in to the rack at 0.18 m/s. {load}"
+            : $"Takes pallets from the rack to docks 1 to 3. {load}";
+    }
+}

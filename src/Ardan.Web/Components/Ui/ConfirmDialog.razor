@@ -1,0 +1,59 @@
+@if (Request is not null)
+{
+    <div class="overlay is-strong" @onclick="CancelAsync"></div>
+    <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-text"
+         tabindex="-1" @ref="_box" @onkeydown="OnKeyAsync">
+        <h2 id="confirm-title">@Request.Title</h2>
+        <p id="confirm-text">@Request.Text</p>
+        <div class="modal-actions">
+            <button type="button" class="btn" @onclick="CancelAsync">Cancel</button>
+            <button type="button" class="btn btn-@Request.Tone" disabled="@_busy" @onclick="ConfirmAsync">@Request.ConfirmLabel</button>
+        </div>
+    </div>
+}
+
+@code {
+    private ElementReference _box;
+    private Confirmation? _focused;
+    private bool _busy;
+
+    [Parameter] public Confirmation? Request { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Request is null)
+        {
+            _focused = null;
+            return;
+        }
+        if (ReferenceEquals(Request, _focused)) return;
+        _focused = Request;
+        try
+        {
+            await _box.FocusAsync();
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (Request is null) return;
+        _busy = true;
+        try
+        {
+            await Request.Confirm();
+        }
+        finally
+        {
+            _busy = false;
+        }
+        await OnClose.InvokeAsync();
+    }
+
+    private Task CancelAsync() => OnClose.InvokeAsync();
+
+    private Task OnKeyAsync(KeyboardEventArgs e) => e.Key == "Escape" ? CancelAsync() : Task.CompletedTask;
+}

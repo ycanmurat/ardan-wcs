@@ -1,0 +1,8 @@
+<Tip Title="@Look.Label" Text="@Look.Help" Side="@Side">
+    <Badge Text="@Look.Label" Tone="@Look.Tone" />
+</Tip>
+
+@code {
+    [Parameter, EditorRequired] public StateLook Look { get; set; } = default!;
+    [Parameter] public string Side { get; set; } = "top";
+}

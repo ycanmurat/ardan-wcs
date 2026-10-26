@@ -1,0 +1,138 @@
+@implements IDisposable
+@inject UiState Ui
+@inject WcsApi Api
+@inject NavigationManager Nav
+
+@if (Ui.SearchOpen)
+{
+    <div class="overlay is-strong" @onclick="Ui.CloseOverlays"></div>
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Search">
+        <div class="palette-input">
+            <Icon Name="search" />
+            <input @ref="_input" value="@_query" @oninput="OnInputAsync" @onkeydown="OnKey" autocomplete="off" spellcheck="false"
+                   placeholder="Find a pallet, order, product or machine" aria-label="Search" />
+            <kbd>Esc</kbd>
+        </div>
+        @if (_results.Count > 0)
+        {
+            <ul class="palette-results" role="listbox">
+                @for (var i = 0; i < _results.Count; i++)
+                {
+                    var hit = _results[i];
+                    var index = i;
+                    <li role="option" aria-selected="@(index == _active ? "true" : "false")" class="palette-item @(index == _active ? "is-active" : null)"
+                        @onclick="() => Go(hit)" @onmousemove="() => _active = index">
+                        <span class="palette-kind">@hit.Kind</span>
+                        <span class="palette-title">@hit.Title</span>
+                        <span class="palette-detail">@hit.Detail</span>
+                    </li>
+                }
+            </ul>
+        }
+        else
+        {
+            <p class="palette-empty">Nothing matches “@_query”. Try a pallet number like PLT-100120, an order like OUT-88201, or a product name.</p>
+        }
+        <footer class="palette-foot"><kbd>↑</kbd><kbd>↓</kbd> move <kbd>Enter</kbd> open</footer>
+    </div>
+}
+
+@code {
+    private static readonly IReadOnlyList<SearchHit> Pages =
+    [
+        new("Page", "overview", "Overview", "The whole store at a glance", "/"),
+        new("Page", "live", "Live system", "Front view of the rack, live", "/live"),
+        new("Page", "fleet", "Fleet", "Taxis, VTUs and conveyors", "/fleet"),
+        new("Page", "orders", "Orders", "Open and finished work", "/orders"),
+        new("Page", "inventory", "Inventory", "Products, pallets and expiry", "/inventory"),
+        new("Page", "alarms", "Alarms", "What needs attention", "/alarms"),
+        new("Page", "insights", "Insights", "Planned AI-assisted features", "/insights"),
+    ];
+
+    private ElementReference _input;
+    private string _query = "";
+    private List<SearchHit> _results = [.. Pages];
+    private int _active;
+    private bool _wasOpen;
+    private CancellationTokenSource? _pending;
+
+    protected override void OnInitialized() => Ui.Changed += Redraw;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Ui.SearchOpen && !_wasOpen)
+        {
+            _wasOpen = true;
+            try
+            {
+                await _input.FocusAsync();
+            }
+            catch (JSException)
+            {
+            }
+        }
+        else if (!Ui.SearchOpen && _wasOpen)
+        {
+            _wasOpen = false;
+            _query = "";
+            _results = [.. Pages];
+            _active = 0;
+        }
+    }
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+        _pending?.Cancel();
+        _pending = new CancellationTokenSource();
+        var token = _pending.Token;
+
+        try
+        {
+            await Task.Delay(120, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        var pages = Pages.Where(page => _query.Length == 0 || page.Title.Contains(_query, StringComparison.OrdinalIgnoreCase));
+        var found = _query.Trim().Length >= 2 ? await Api.SearchAsync(_query) : [];
+        if (token.IsCancellationRequested) return;
+        _results = [.. found, .. pages];
+        _active = 0;
+    }
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown" when _results.Count > 0:
+                _active = (_active + 1) % _results.Count;
+                break;
+            case "ArrowUp" when _results.Count > 0:
+                _active = (_active - 1 + _results.Count) % _results.Count;
+                break;
+            case "Enter" when _results.Count > 0:
+                Go(_results[Math.Clamp(_active, 0, _results.Count - 1)]);
+                break;
+            case "Escape":
+                Ui.CloseOverlays();
+                break;
+        }
+    }
+
+    private void Go(SearchHit hit)
+    {
+        Ui.CloseOverlays();
+        Nav.NavigateTo(hit.Link);
+    }
+
+    private void Redraw() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Ui.Changed -= Redraw;
+        _pending?.Cancel();
+    }
+}

@@ -1,0 +1,16 @@
+<div class="fact">
+    <dt>
+        @Label
+        @if (Help is not null)
+        {
+            <InfoTip Title="@Label" Text="@Help" Side="bottom" />
+        }
+    </dt>
+    <dd>@ChildContent</dd>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Help { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,314 @@
+@page "/fleet"
+@inherits LiveComponent
+@inject WcsApi Api
+@inject UiState Ui
+@inject NavigationManager Nav
+
+<PageTitle>Fleet · Ardán</PageTitle>
+
+@if (Live is not { } live)
+{
+    <PageHeader Title="Fleet" Subtitle="Taxis, VTUs and conveyors." />
+    <Waiting />
+}
+else
+{
+    <PageHeader Title="Fleet" Subtitle="@Summary(live)" />
+
+    <section class="card">
+        <CardHeader Title="Taxis" Help="Battery pallet shuttles. A Taxi drives along one level and rides a VTU to reach another. It charges at the dock whenever it stops there." />
+        <div class="table-wrap">
+            <table class="table is-clickable">
+                <thead>
+                    <tr>
+                        <th>Taxi</th>
+                        <th>State</th>
+                        <th>Doing now</th>
+                        <th>Level</th>
+                        <th>Battery <InfoTip Title="Battery" Text="Taxis take new jobs above 30%. Below 20% a warning is raised and the Taxi goes to charge after its job." Side="bottom" /></th>
+                        <th>Wi-Fi <InfoTip Title="Wi-Fi" Text="Signal of the meshed Wi-Fi that links each Taxi to the control system. Fewer than two bars raises a warning." Side="bottom" /></th>
+                        <th class="num">Motor <InfoTip Title="Motor temperature" Text="Drive motor temperature. It rises while driving and cools at the dock." Side="bottom" /></th>
+                        <th class="num">Distance <InfoTip Title="Distance" Text="Distance driven since the control server started." Side="bottom" /></th>
+                        <th><span class="sr-only">Open</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var taxi in live.Taxis)
+                    {
+                        <tr @key="taxi.Id" class="@(taxi.Id == Select ? "is-selected" : null)" @onclick="() => Open(taxi.Id)">
+                            <td><strong>@taxi.Id</strong></td>
+                            <td><StateBadge Look="Display.Look(taxi.State)" /></td>
+                            <td class="cell-wide">@taxi.Activity</td>
+                            <td>@(taxi.State == TaxiState.OnLift && taxi.LiftId is not null ? taxi.LiftId : $"L{taxi.Level}")</td>
+                            <td><BatteryMeter Value="taxi.Battery" Charging="taxi.State == TaxiState.Charging" /></td>
+                            <td><SignalBars Bars="taxi.Signal" /></td>
+                            <td class="num">@Display.Num(taxi.MotorTempC, "0") °C</td>
+                            <td class="num">@Display.Num(taxi.DistanceKm, "0.00") km</td>
+                            <td class="row-go"><Icon Name="chevron-right" Size="16" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="grid grid-half">
+        <section class="card">
+            <CardHeader Title="Vertical lifts (VTUs)" Help="Each VTU carries one Taxi at a time between levels, loaded or empty, at up to 1.2 m/s. Taxis queue at the dock for the first free one." />
+            <div class="machines">
+                @foreach (var lift in live.Lifts)
+                {
+                    var look = Display.Look(lift.State);
+                    <article class="machine tone-@look.Tone @(lift.Id == Select ? "is-selected" : null)" @key="lift.Id">
+                        <header class="machine-head">
+                            <span class="machine-icon"><Icon Name="lift" /></span>
+                            <div>
+                                <strong>@lift.Id</strong>
+                                <span class="muted">Shaft @(lift.Shaft + 1)</span>
+                            </div>
+                            <StateBadge Look="look" />
+                        </header>
+                        <p class="machine-activity">@lift.Activity</p>
+                        <div class="shaft-gauge" aria-label="@($"At level {Display.Num(lift.Position, "0.0")}")">
+                            @for (var level = 0; level < (Feed.Layout?.Levels ?? 6); level++)
+                            {
+                                <i class="@(Math.Abs(lift.Position - level) < 0.5 ? "is-here" : null)">@level</i>
+                            }
+                        </div>
+                        <footer class="machine-foot">
+                            <span class="muted">@(lift.Waiting == 0 ? "No Taxis waiting" : $"{lift.Waiting} {(lift.Waiting == 1 ? "Taxi" : "Taxis")} waiting")</span>
+                            <button type="button" class="btn btn-sm" @onclick="() => Open(lift.Id)">Details</button>
+                        </footer>
+                    </article>
+                }
+            </div>
+        </section>
+
+        <section class="card">
+            <CardHeader Title="Conveyors" Help="The infeed brings pallets from goods-in to the rack, with a profile check at the start. The outfeed takes pallets to docks 1 to 3. Both run at 0.18 m/s." />
+            <div class="machines">
+                @foreach (var belt in live.Conveyors)
+                {
+                    var jammed = belt.State == ConveyorState.Jammed;
+                    <article class="machine tone-@(jammed ? "crit" : "ok")" @key="belt.Id">
+                        <header class="machine-head">
+                            <span class="machine-icon"><Icon Name="conveyor" /></span>
+                            <div>
+                                <strong>@belt.Name</strong>
+                                <span class="muted">@belt.Id · @Display.Num(belt.Length, "0") m</span>
+                            </div>
+                            <Badge Text="@(jammed ? "Jammed" : "Running")" Tone="@(jammed ? "crit" : "ok")" />
+                        </header>
+                        <div class="belt-strip @(jammed ? "is-jammed" : null) @(belt.Id == "C-IN" ? "is-in" : "is-out")">
+                            @foreach (var item in belt.Items)
+                            {
+                                <i style="left: @Display.Num(Math.Clamp(item.Position / belt.Length, 0, 1) * 92, "0.#")%" title="@item.PalletId" @key="item.PalletId"></i>
+                            }
+                        </div>
+                        <footer class="machine-foot">
+                            <span class="muted">@(belt.Items.Count == 0 ? "Empty" : $"{belt.Items.Count} on the belt")</span>
+                            @if (jammed)
+                            {
+                                <button type="button" class="btn btn-sm btn-danger" @onclick="() => ConfirmConveyorReset(belt)">Reset</button>
+                            }
+                        </footer>
+                    </article>
+                }
+            </div>
+        </section>
+    </div>
+
+    <Drawer Open="SelectedTaxi is not null" Kicker="Taxi" Title="@(SelectedTaxi?.Id ?? "")" Subtitle="@SelectedTaxi?.Activity" OnClose="Close">
+        <ChildContent>
+            @if (SelectedTaxi is { } taxi)
+            {
+                <div class="drawer-state">
+                    <StateBadge Look="Display.Look(taxi.State)" Side="bottom" />
+                    @if (!taxi.InService)
+                    {
+                        <Badge Text="Out of service" Tone="neutral" />
+                    }
+                    @if (taxi.ChargeHold)
+                    {
+                        <Badge Text="Charging to 95%" Tone="ok" />
+                    }
+                </div>
+                if (taxi.FaultCode is not null)
+                {
+                    <div class="note tone-crit">
+                        <Icon Name="warning" Size="16" />
+                        <span>Stopped by a safety sensor (@taxi.FaultCode). Check the aisle on level @taxi.Level is clear before you reset it. If nobody does, remote support resets it after a camera check.</span>
+                    </div>
+                }
+                <dl class="facts">
+                    <Fact Label="Battery" Help="Above 30% it takes new jobs. Below 20% it goes to charge after its job."><BatteryMeter Value="taxi.Battery" Charging="taxi.State == TaxiState.Charging" /></Fact>
+                    <Fact Label="Where">@Where(taxi)</Fact>
+                    <Fact Label="Speed" Help="1.8 m/s empty and 1.4 m/s loaded.">@Display.Num(taxi.SpeedMs, "0.0") m/s</Fact>
+                    <Fact Label="Carrying">@(taxi.PalletId is null ? "Nothing" : $"{taxi.PalletId} · {taxi.SkuName}")</Fact>
+                    <Fact Label="Job">@(taxi.JobId is null ? "None" : $"{taxi.JobId} · {(taxi.JobKind == JobKind.Putaway ? "putaway" : "retrieval")}")</Fact>
+                    <Fact Label="Motor">@Display.Num(taxi.MotorTempC, "0.0") °C</Fact>
+                    <Fact Label="Wi-Fi"><SignalBars Bars="taxi.Signal" /></Fact>
+                    <Fact Label="Distance">@Display.Num(taxi.DistanceKm, "0.00") km</Fact>
+                </dl>
+                <h3 class="drawer-section">What the actions do</h3>
+                <ul class="action-help">
+                    <li><strong>Send to charge.</strong> It finishes its job, then charges to 95% before it takes new work.</li>
+                    <li><strong>Take out of service.</strong> It parks at the dock and gets no jobs. Use this before maintenance.</li>
+                    <li><strong>Reset.</strong> Only after a stop, once the area is clear.</li>
+                </ul>
+            }
+        </ChildContent>
+        <Footer>
+            @if (SelectedTaxi is { } taxi)
+            {
+                if (taxi.FaultCode is not null)
+                {
+                    <button type="button" class="btn btn-danger" @onclick="() => ConfirmTaxi(taxi, TaxiCommand.Reset)"><Icon Name="reset" Size="16" />Reset @taxi.Id</button>
+                }
+                else
+                {
+                    <Tip Text="@ChargeHelp(taxi)">
+                        <button type="button" class="btn" disabled="@(!taxi.InService || taxi.ChargeHold)" @onclick="() => ConfirmTaxi(taxi, TaxiCommand.Charge)"><Icon Name="bolt" Size="16" />Send to charge</button>
+                    </Tip>
+                    if (taxi.InService)
+                    {
+                        <Tip Text="@ParkHelp(taxi)">
+                            <button type="button" class="btn" disabled="@(taxi.JobId is not null)" @onclick="() => ConfirmTaxi(taxi, TaxiCommand.Park)"><Icon Name="pause" Size="16" />Take out of service</button>
+                        </Tip>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="() => ConfirmTaxi(taxi, TaxiCommand.Resume)"><Icon Name="play" Size="16" />Return to service</button>
+                    }
+                }
+            }
+        </Footer>
+    </Drawer>
+
+    <Drawer Open="SelectedLift is not null" Kicker="VTU" Title="@(SelectedLift?.Id ?? "")" Subtitle="@SelectedLift?.Activity" OnClose="Close">
+        <ChildContent>
+            @if (SelectedLift is { } lift)
+            {
+                <div class="drawer-state"><StateBadge Look="Display.Look(lift.State)" Side="bottom" /></div>
+                if (lift.FaultCode is not null)
+                {
+                    <div class="note tone-crit">
+                        <Icon Name="warning" Size="16" />
+                        <span>Stopped by a drive fault (@lift.FaultCode). Taxis that need it wait at the dock. Reset it once the shaft is clear.</span>
+                    </div>
+                }
+                <dl class="facts">
+                    <Fact Label="Shaft">@(lift.Shaft + 1)</Fact>
+                    <Fact Label="Position">Level @Display.Num(lift.Position, "0.0")</Fact>
+                    <Fact Label="On board">@(lift.TaxiId is null ? "No Taxi" : $"{lift.TaxiId}{(lift.Loaded ? ", with a pallet" : ", empty")}")</Fact>
+                    <Fact Label="Queue" Help="Taxis waiting at the dock for this VTU.">@lift.Waiting</Fact>
+                    <Fact Label="Load limit">2,000 kg</Fact>
+                    <Fact Label="Speed">Up to 1.2 m/s</Fact>
+                </dl>
+            }
+        </ChildContent>
+        <Footer>
+            @if (SelectedLift is { FaultCode: not null } lift)
+            {
+                <button type="button" class="btn btn-danger" @onclick="() => ConfirmLiftReset(lift)"><Icon Name="reset" Size="16" />Reset @lift.Id</button>
+            }
+            else
+            {
+                <span class="muted">No actions needed while it runs.</span>
+            }
+        </Footer>
+    </Drawer>
+
+    <ConfirmDialog Request="_confirm" OnClose="() => _confirm = null" />
+}
+
+@code {
+    private Confirmation? _confirm;
+
+    [SupplyParameterFromQuery(Name = "select")] public string? Select { get; set; }
+
+    private enum TaxiCommand { Charge, Park, Resume, Reset }
+
+    protected override TimeSpan RefreshEvery => TimeSpan.FromMilliseconds(500);
+
+    private TaxiView? SelectedTaxi => Select is null ? null : Live?.Taxis.FirstOrDefault(taxi => taxi.Id.Equals(Select, StringComparison.OrdinalIgnoreCase));
+
+    private LiftView? SelectedLift => Select is null ? null : Live?.Lifts.FirstOrDefault(lift => lift.Id.Equals(Select, StringComparison.OrdinalIgnoreCase));
+
+    private void Open(string id) => Nav.NavigateTo($"fleet?select={id}", replace: true);
+
+    private void Close() => Nav.NavigateTo("fleet", replace: true);
+
+    private static string Summary(LiveSnapshot live)
+    {
+        var working = live.Taxis.Count(taxi => taxi.JobId is not null);
+        var charging = live.Taxis.Count(taxi => taxi.State == TaxiState.Charging);
+        var stopped = live.Taxis.Count(taxi => taxi.FaultCode is not null) + live.Lifts.Count(lift => lift.FaultCode is not null);
+        var text = $"{working} of {live.Taxis.Count} Taxis on a job · {charging} charging";
+        return stopped == 0 ? text : $"{text} · {stopped} stopped";
+    }
+
+    private string Where(TaxiView taxi)
+    {
+        if (taxi.LiftId is not null && taxi.State == TaxiState.OnLift) return $"On {taxi.LiftId}";
+        return taxi.X < 0.05 ? $"Dock, level {taxi.Level}" : $"Level {taxi.Level}, bay {Display.Num(taxi.X, "0.0")}";
+    }
+
+    private static string ChargeHelp(TaxiView taxi) => taxi switch
+    {
+        { InService: false } => "It is out of service. Return it to service first.",
+        { ChargeHold: true } => "Already going to charge to 95%.",
+        { JobId: { } job } => $"It finishes {job}, then charges to 95%.",
+        _ => "It drives to the dock and charges to 95%.",
+    };
+
+    private static string ParkHelp(TaxiView taxi) => taxi.JobId is { } job
+        ? $"Busy with {job}. Try again when the job is done."
+        : "It parks at the dock and gets no new jobs.";
+
+    private void ConfirmTaxi(TaxiView taxi, TaxiCommand command)
+    {
+        _confirm = command switch
+        {
+            TaxiCommand.Charge => new(
+                $"Send {taxi.Id} to charge?",
+                taxi.JobId is null
+                    ? $"{taxi.Id} drives to the dock and charges to 95% before it takes new jobs."
+                    : $"{taxi.Id} finishes {taxi.JobId} first, then charges to 95%.",
+                "Send to charge",
+                () => RunAsync(Api.TaxiAsync(taxi.Id, "charge"))),
+            TaxiCommand.Park => new(
+                $"Take {taxi.Id} out of service?",
+                $"{taxi.Id} parks at the dock on level {taxi.Level} and gets no new jobs. The other Taxis share its work.",
+                "Take out of service",
+                () => RunAsync(Api.TaxiAsync(taxi.Id, "park"))),
+            TaxiCommand.Resume => new(
+                $"Return {taxi.Id} to service?",
+                $"{taxi.Id} can take jobs again straight away.",
+                "Return to service",
+                () => RunAsync(Api.TaxiAsync(taxi.Id, "resume"))),
+            _ => new(
+                $"Reset {taxi.Id}?",
+                $"Only reset when the aisle on level {taxi.Level} is clear of people and objects. {taxi.Id} carries on with its job.",
+                "Area is clear, reset",
+                () => RunAsync(Api.TaxiAsync(taxi.Id, "reset")),
+                "danger"),
+        };
+    }
+
+    private void ConfirmLiftReset(LiftView lift) => _confirm = new(
+        $"Reset {lift.Id}?",
+        $"Only reset when shaft {lift.Shaft + 1} is clear. Taxis waiting for {lift.Id} carry on.",
+        "Shaft is clear, reset",
+        () => RunAsync(Api.ResetLiftAsync(lift.Id)),
+        "danger");
+
+    private void ConfirmConveyorReset(ConveyorView belt) => _confirm = new(
+        $"Reset the {belt.Name.ToLowerInvariant()}?",
+        "Only reset once the jammed pallet has been cleared and nobody is near the rollers.",
+        "Jam cleared, reset",
+        () => RunAsync(Api.ResetConveyorAsync(belt.Id)),
+        "danger");
+
+    private async Task RunAsync(Task<CommandResult> command) => Ui.Show(await command);
+}

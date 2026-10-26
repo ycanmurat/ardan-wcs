@@ -1,0 +1,173 @@
+@page "/"
+@inherits LiveComponent
+
+<PageTitle>Overview · Ardán</PageTitle>
+
+@if (Live is not { } live)
+{
+    <PageHeader Title="Overview" Subtitle="The whole store at a glance." />
+    <Waiting />
+}
+else
+{
+    var k = live.Kpis;
+    <PageHeader Title="Overview" Subtitle="@($"{Feed.Layout?.Site} · live, updated {Display.Clock(live.Time)}")">
+        <a class="btn" href="live"><Icon Name="live" Size="16" />Open live view</a>
+    </PageHeader>
+
+    <div class="kpis">
+        <KpiCard Label="Pallets in store" Value="@Display.Count(k.Stored)" Unit="@($"of {Display.Count(k.Capacity)}")"
+                 Help="Pallets stored in the rack now, out of all pallet places. Lanes are six pallets deep.">
+            <ProgressBar Value="k.Stored" Max="k.Capacity" Tone="@(k.Occupancy > 0.9 ? "warn" : "brand")" />
+            <span>@Display.Percent(k.Occupancy) full</span>
+        </KpiCard>
+        <KpiCard Label="Moved in 1 hour" Value="@Display.Count(k.InLastHour + k.OutLastHour)" Unit="pallets"
+                 Help="Pallets stored (in) plus pallets sent to the docks (out) in the last 60 minutes.">
+            <span class="split"><i class="key is-in"></i>@k.InLastHour in <i class="key is-out"></i>@k.OutLastHour out</span>
+        </KpiCard>
+        <KpiCard Label="Machines ready" Value="@k.ReadyMachines.ToString()" Unit="@($"of {k.Machines}")" Tone="@(k.ReadyMachines < k.Machines ? "warn" : null)"
+                 Help="Taxis in service without a fault, plus VTUs without a fault.">
+            <span>@MachinesNote(live)</span>
+        </KpiCard>
+        <KpiCard Label="Cycle time" Value="@(k.AverageCycleSeconds > 0 ? Display.Num(k.AverageCycleSeconds, "0") : "—")" Unit="@(k.AverageCycleSeconds > 0 ? "s" : null)"
+                 Help="Average time from giving a job to a Taxi until it sets the pallet down. Last 30 jobs.">
+            <span>@(k.AverageCycleSeconds > 0 ? "Per pallet move" : "No job finished yet")</span>
+        </KpiCard>
+        <KpiCard Label="Open orders" Value="@k.OpenOrders.ToString()" Tone="@(k.Late > 0 ? "warn" : null)"
+                 Help="Inbound and outbound orders that are not finished yet. Late means past the due time.">
+            <span>@k.DueSoon due in 30 min · @k.Late late</span>
+        </KpiCard>
+        <KpiCard Label="Active alarms" Value="@((k.CriticalAlarms + k.WarningAlarms).ToString())" Tone="@AlarmTone(k)"
+                 Help="Critical alarms mean a machine has stopped. Warnings are worth a look; the store keeps running.">
+            <span>@k.CriticalAlarms critical · @k.WarningAlarms warning</span>
+        </KpiCard>
+    </div>
+
+    <div class="grid grid-wide">
+        <section class="card">
+            <CardHeader Title="Throughput" Help="Pallets per hour over the last 60 minutes, as a 10-minute rolling average. Hover the chart for any minute.">
+                <span class="legend"><i class="key is-in"></i>Stored <i class="key is-out"></i>Dispatched</span>
+            </CardHeader>
+            <ThroughputChart Points="live.Throughput" />
+        </section>
+        <section class="card">
+            <CardHeader Title="Storage" Help="How full the rack is, in total and per level. Level 0 is the ground floor, next to the conveyors." />
+            <div class="storage">
+                <OccupancyRing Share="k.Occupancy" Caption="full" />
+                <ul class="level-bars">
+                    @foreach (var (level, stored, places) in Levels())
+                    {
+                        <li>
+                            <span class="level-name">L@(level)</span>
+                            <ProgressBar Value="stored" Max="places" />
+                            <span class="level-value">@stored</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </section>
+    </div>
+
+    <section class="card">
+        <CardHeader Title="Fleet" Help="Every Taxi and VTU and what it is doing now. Click one for details and actions.">
+            <a class="link" href="fleet">Open fleet <Icon Name="chevron-right" Size="14" /></a>
+        </CardHeader>
+        <div class="units">
+            @foreach (var taxi in live.Taxis)
+            {
+                var look = Display.Look(taxi.State);
+                <a class="unit tone-@look.Tone" href="@($"fleet?select={taxi.Id}")" @key="taxi.Id">
+                    <span class="unit-head">
+                        <strong>@taxi.Id</strong>
+                        <Badge Text="@look.Label" Tone="@look.Tone" />
+                    </span>
+                    <span class="unit-activity">@taxi.Activity</span>
+                    <span class="unit-foot">
+                        <BatteryMeter Value="taxi.Battery" Charging="taxi.State == TaxiState.Charging" />
+                        <span class="muted">@(taxi.State == TaxiState.OnLift && taxi.LiftId is not null ? $"On {taxi.LiftId}" : $"Level {taxi.Level}")</span>
+                    </span>
+                </a>
+            }
+            @foreach (var lift in live.Lifts)
+            {
+                var look = Display.Look(lift.State);
+                <a class="unit is-lift tone-@look.Tone" href="@($"fleet?select={lift.Id}")" @key="lift.Id">
+                    <span class="unit-head">
+                        <strong>@lift.Id</strong>
+                        <Badge Text="@look.Label" Tone="@look.Tone" />
+                    </span>
+                    <span class="unit-activity">@lift.Activity</span>
+                    <span class="unit-foot">
+                        <span class="muted">VTU · level @Display.Num(lift.Position, "0.0")</span>
+                        <span class="muted">@(lift.Waiting == 0 ? "No queue" : $"{lift.Waiting} waiting")</span>
+                    </span>
+                </a>
+            }
+        </div>
+    </section>
+
+    <div class="grid grid-half">
+        <section class="card">
+            <CardHeader Title="Needs attention" Help="Active alarms, most serious first, with the first thing to do. Open Alarms for all the steps.">
+                <a class="link" href="alarms">All alarms <Icon Name="chevron-right" Size="14" /></a>
+            </CardHeader>
+            @if (live.ActiveAlarms.Count == 0)
+            {
+                <EmptyState Title="All clear" Text="No alarms right now. Every machine is running." />
+            }
+            else
+            {
+                <ul class="attention">
+                    @foreach (var alarm in live.ActiveAlarms.Take(4))
+                    {
+                        var look = Display.Look(alarm.Severity);
+                        <li class="attention-item tone-@look.Tone" @key="alarm.Id">
+                            <span class="attention-icon"><Icon Name="warning" Size="16" /></span>
+                            <div class="attention-text">
+                                <strong>@alarm.Title</strong>
+                                <p>@alarm.Steps.FirstOrDefault()</p>
+                                <small>@alarm.Source · @Display.Ago(alarm.RaisedAt, Now)@(alarm.State == AlarmState.Acknowledged ? " · acknowledged" : null)</small>
+                            </div>
+                            <a class="btn btn-sm" href="alarms">Open</a>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+        <section class="card">
+            <CardHeader Title="Activity" Help="The latest events in the store, newest first. Times are site time in Dublin." />
+            <ol class="feed">
+                @foreach (var item in live.Events)
+                {
+                    var (icon, tone) = Display.Look(item.Kind);
+                    <li class="feed-item" @key="item.Seq">
+                        <span class="feed-icon tone-@tone"><Icon Name="@icon" Size="14" /></span>
+                        <span class="feed-text">@item.Text</span>
+                        <time>@Display.Clock(item.Time)</time>
+                    </li>
+                }
+            </ol>
+        </section>
+    </div>
+}
+
+@code {
+    protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(1);
+
+    private IEnumerable<(int Level, int Stored, int Places)> Levels() =>
+        Feed.Lanes
+            .GroupBy(lane => lane.Level)
+            .OrderByDescending(group => group.Key)
+            .Select(group => (group.Key, group.Sum(lane => lane.Count), group.Sum(lane => lane.Depth)));
+
+    private static string? AlarmTone(KpiSet k) => k.CriticalAlarms > 0 ? "crit" : k.WarningAlarms > 0 ? "warn" : null;
+
+    private static string MachinesNote(LiveSnapshot live)
+    {
+        var notes = live.Taxis.Where(taxi => taxi.FaultCode is not null).Select(taxi => $"{taxi.Id} stopped")
+            .Concat(live.Lifts.Where(lift => lift.FaultCode is not null).Select(lift => $"{lift.Id} stopped"))
+            .Concat(live.Taxis.Where(taxi => !taxi.InService).Select(taxi => $"{taxi.Id} out of service"))
+            .ToList();
+        return notes.Count == 0 ? "Every Taxi and VTU can work" : string.Join(" · ", notes);
+    }
+}

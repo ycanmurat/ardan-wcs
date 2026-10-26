@@ -1,0 +1,57 @@
+@inherits LiveComponent
+@inject UiState Ui
+
+<aside class="sidebar">
+    <a class="brand" href="">
+        <BrandMark />
+        <span class="brand-text">
+            <strong>Ardán</strong>
+            <small>Warehouse control</small>
+        </span>
+    </a>
+
+    <div class="site">
+        <span class="site-dot tone-@SiteTone"></span>
+        <div class="site-text">
+            <strong>@(Feed.Layout?.Company ?? "Connecting…")</strong>
+            <small>@Feed.Layout?.Site</small>
+        </div>
+    </div>
+
+    <nav class="nav" aria-label="Main">
+        <NavItem Href="" Icon="overview" Label="Overview" Exact />
+        <NavItem Href="live" Icon="live" Label="Live system" />
+        <NavItem Href="fleet" Icon="taxi" Label="Fleet" Count="@Stopped" Tone="crit" />
+        <NavItem Href="orders" Icon="orders" Label="Orders" Count="@(Live?.Orders.Open ?? 0)" />
+        <NavItem Href="inventory" Icon="inventory" Label="Inventory" />
+        <NavItem Href="alarms" Icon="alarm" Label="Alarms" Count="@(Live?.ActiveAlarms.Count ?? 0)" Tone="@AlarmTone" />
+        <span class="nav-heading">Next phase</span>
+        <NavItem Href="insights" Icon="insights" Label="Insights" Tag="Planned" />
+    </nav>
+
+    <div class="sidebar-foot">
+        <button type="button" class="sidebar-help" @onclick="Ui.ToggleHelp">
+            <Icon Name="help" Size="16" />
+            <span>Help &amp; shortcuts</span>
+            <kbd>?</kbd>
+        </button>
+        <ThemeToggle />
+    </div>
+</aside>
+
+@code {
+    protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(1);
+
+    private int Stopped =>
+        (Live?.Taxis.Count(taxi => taxi.FaultCode is not null) ?? 0) + (Live?.Lifts.Count(lift => lift.FaultCode is not null) ?? 0);
+
+    private string AlarmTone => Live?.Kpis.CriticalAlarms > 0 ? "crit" : "warn";
+
+    private string SiteTone => Feed.Status switch
+    {
+        FeedStatus.Live when Live?.Health.Level == HealthLevel.Attention => "crit",
+        FeedStatus.Live => "ok",
+        FeedStatus.Offline => "crit",
+        _ => "warn",
+    };
+}

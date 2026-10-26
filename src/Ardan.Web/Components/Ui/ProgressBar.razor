@@ -1,0 +1,16 @@
+<span class="progress tone-@Tone" role="progressbar" aria-valuemin="0" aria-valuemax="@Max" aria-valuenow="@Value">
+    <span class="progress-done" style="width: @Display.Num(Share(Value), "0.#")%"></span>
+    @if (Pending > 0)
+    {
+        <span class="progress-pending" style="width: @Display.Num(Share(Pending), "0.#")%"></span>
+    }
+</span>
+
+@code {
+    [Parameter] public int Value { get; set; }
+    [Parameter] public int Pending { get; set; }
+    [Parameter] public int Max { get; set; } = 1;
+    [Parameter] public string Tone { get; set; } = "brand";
+
+    private double Share(int part) => Max <= 0 ? 0 : Math.Clamp(part * 100.0 / Max, 0, 100);
+}

@@ -1,0 +1,23 @@
+<section class="card kpi @(Tone is null ? null : $"tone-{Tone}")">
+    <div class="kpi-head">
+        <span class="kpi-label">@Label</span>
+        <InfoTip Title="@Label" Text="@Help" Side="bottom" />
+    </div>
+    <div class="kpi-value">
+        @Value
+        @if (Unit is not null)
+        {
+            <span class="kpi-unit">@Unit</span>
+        }
+    </div>
+    <div class="kpi-foot">@ChildContent</div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Help { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string? Unit { get; set; }
+    [Parameter] public string? Tone { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

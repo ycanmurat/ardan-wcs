@@ -1,0 +1,62 @@
+@if (Open)
+{
+    <div class="overlay" @onclick="CloseAsync"></div>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1" @ref="_panel" @onkeydown="OnKeyAsync">
+        <header class="drawer-head">
+            <div class="drawer-heading">
+                @if (Kicker is not null)
+                {
+                    <span class="drawer-kicker">@Kicker</span>
+                }
+                <h2 id="drawer-title">@Title</h2>
+                @if (Subtitle is not null)
+                {
+                    <p class="drawer-sub">@Subtitle</p>
+                }
+            </div>
+            <button type="button" class="icon-btn" @onclick="CloseAsync" aria-label="Close panel"><Icon Name="x" /></button>
+        </header>
+        <div class="drawer-body">@ChildContent</div>
+        @if (Footer is not null)
+        {
+            <footer class="drawer-foot">@Footer</footer>
+        }
+    </aside>
+}
+
+@code {
+    private ElementReference _panel;
+    private bool _wasOpen;
+    private bool _focusPending;
+
+    [Parameter] public bool Open { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Kicker { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen) _focusPending = true;
+        _wasOpen = Open;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending) return;
+        _focusPending = false;
+        try
+        {
+            await _panel.FocusAsync();
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    private Task OnKeyAsync(KeyboardEventArgs e) => e.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+}

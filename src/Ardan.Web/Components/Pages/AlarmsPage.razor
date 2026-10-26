@@ -1,0 +1,202 @@
+@page "/alarms"
+@inherits LiveComponent
+@inject WcsApi Api
+@inject UiState Ui
+
+<PageTitle>Alarms · Ardán</PageTitle>
+
+@if (Live is not { } live)
+{
+    <PageHeader Title="Alarms" Subtitle="What needs attention, and what to do about it." />
+    <Waiting />
+}
+else
+{
+    <PageHeader Title="Alarms" Subtitle="@Summary(live)" />
+
+    if (live.ActiveAlarms.Count == 0)
+    {
+        <div class="card">
+            <EmptyState Title="All clear" Text="No active alarms. Every machine is running and the store is in range." />
+        </div>
+    }
+    else
+    {
+        <div class="alarm-list">
+            @foreach (var alarm in live.ActiveAlarms)
+            {
+                var severity = Display.Look(alarm.Severity);
+                <article class="alarm tone-@severity.Tone @(alarm.State == AlarmState.Acknowledged ? "is-acknowledged" : null)" @key="alarm.Id">
+                    <header class="alarm-head">
+                        <span class="alarm-icon"><Icon Name="@(alarm.Severity == Severity.Critical ? "warning" : "alarm")" Size="18" /></span>
+                        <div class="alarm-title">
+                            <h2>@alarm.Title</h2>
+                            <span class="muted">@alarm.Source · @alarm.Code · raised @Display.Time(alarm.RaisedAt), @Display.Ago(alarm.RaisedAt, Now)</span>
+                        </div>
+                        <div class="alarm-badges">
+                            <StateBadge Look="severity" Side="bottom" />
+                            @if (alarm.State == AlarmState.Acknowledged)
+                            {
+                                <Tip Text="Someone is on it. The alarm stays until the cause is fixed." Side="bottom"><Badge Text="Acknowledged" Tone="neutral" /></Tip>
+                            }
+                        </div>
+                    </header>
+                    <div class="alarm-body">
+                        <div>
+                            <h3>What happened</h3>
+                            <p>@alarm.What</p>
+                            <h3>Likely cause</h3>
+                            <p>@alarm.Cause</p>
+                        </div>
+                        <div>
+                            <h3>What to do</h3>
+                            <ol class="steps">
+                                @foreach (var step in alarm.Steps)
+                                {
+                                    <li>@step</li>
+                                }
+                            </ol>
+                        </div>
+                    </div>
+                    <footer class="alarm-foot">
+                        @if (FallbackNote(alarm) is { } note)
+                        {
+                            <span class="alarm-note"><Icon Name="clock" Size="14" />@note</span>
+                        }
+                        <div class="alarm-actions">
+                            @if (MachineLink(alarm) is { } link)
+                            {
+                                <a class="btn btn-ghost" href="@link">Open @alarm.Source</a>
+                            }
+                            @if (alarm.State == AlarmState.Active)
+                            {
+                                <button type="button" class="btn" @onclick="() => AcknowledgeAsync(alarm)"><Icon Name="check" Size="16" />Acknowledge</button>
+                            }
+                            @if (alarm.Action != AlarmAction.None && alarm.ActionLabel is not null)
+                            {
+                                <button type="button" class="btn @(alarm.Action == AlarmAction.Reinduct ? "btn-primary" : "btn-danger")" @onclick="() => ConfirmAction(alarm)">
+                                    <Icon Name="@(alarm.Action == AlarmAction.Reinduct ? "reset" : "wrench")" Size="16" />@alarm.ActionLabel
+                                </button>
+                            }
+                        </div>
+                    </footer>
+                </article>
+            }
+        </div>
+    }
+
+    <section class="card">
+        <CardHeader Title="History" Help="Closed alarms, newest first. Closed by shows who fixed it: an operator, remote support, or the system when the cause went away." />
+        @if (_history.Count == 0)
+        {
+            <EmptyState Icon="clock" Tone="neutral" Title="No closed alarms yet" Text="Alarms appear here once they are fixed." />
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Raised</th>
+                            <th>Alarm</th>
+                            <th>Source</th>
+                            <th>Severity</th>
+                            <th class="num">Open for</th>
+                            <th>Closed by</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var alarm in _history.Take(40))
+                        {
+                            <tr @key="alarm.Id">
+                                <td>@Display.Date(alarm.RaisedAt)</td>
+                                <td>@alarm.Title<span class="sub">@alarm.Code</span></td>
+                                <td>@alarm.Source</td>
+                                <td><Badge Text="@Display.Look(alarm.Severity).Label" Tone="@Display.Look(alarm.Severity).Tone" /></td>
+                                <td class="num">@Duration(alarm)</td>
+                                <td>@(alarm.ClearedBy ?? "System")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    <ConfirmDialog Request="_confirm" OnClose="() => _confirm = null" />
+}
+
+@code {
+    private static readonly TimeSpan RemoteResetAfter = TimeSpan.FromMinutes(4);
+    private static readonly TimeSpan ReturnAfter = TimeSpan.FromMinutes(10);
+    private IReadOnlyList<AlarmView> _history = [];
+    private string _activeKey = "";
+    private DateTime _historyLoaded;
+    private Confirmation? _confirm;
+
+    protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(1);
+
+    protected override async Task OnInitializedAsync() => await LoadHistoryAsync();
+
+    protected override async Task OnLiveAsync()
+    {
+        var key = string.Join(',', Live?.ActiveAlarms.Select(alarm => alarm.Id) ?? []);
+        if (key == _activeKey && DateTime.UtcNow - _historyLoaded < TimeSpan.FromSeconds(15)) return;
+        _activeKey = key;
+        await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        _history = await Api.AlarmHistoryAsync();
+        _historyLoaded = DateTime.UtcNow;
+    }
+
+    private static string Summary(LiveSnapshot live)
+    {
+        var critical = live.Kpis.CriticalAlarms;
+        var warnings = live.Kpis.WarningAlarms;
+        if (critical + warnings == 0) return "No active alarms. Fixed alarms are listed under History.";
+        return $"{critical} critical · {warnings} {(warnings == 1 ? "warning" : "warnings")}. Each one says what happened and what to do.";
+    }
+
+    private static string? MachineLink(AlarmView alarm) =>
+        alarm.Source.StartsWith("T-", StringComparison.Ordinal) || alarm.Source.StartsWith("V-", StringComparison.Ordinal)
+            ? $"fleet?select={alarm.Source}"
+            : alarm.Code == "CNV-JAM" ? "fleet" : null;
+
+    private static string? FallbackNote(AlarmView alarm) => alarm.Action switch
+    {
+        AlarmAction.ResetTaxi or AlarmAction.ResetLift or AlarmAction.ResetConveyor =>
+            $"If nobody resets it, remote support checks the camera and resets it at {Display.Time(alarm.RaisedAt + RemoteResetAfter)}.",
+        AlarmAction.Reinduct =>
+            $"If it is not fixed, the pallet goes back to the supplier at {Display.Time(alarm.RaisedAt + ReturnAfter)}.",
+        _ => alarm.Severity == Severity.Warning ? "Clears by itself when the cause goes away." : null,
+    };
+
+    private static string Duration(AlarmView alarm)
+    {
+        if (alarm.ClearedAt is not { } cleared) return "—";
+        var span = cleared - alarm.RaisedAt;
+        return span < TimeSpan.FromMinutes(1) ? $"{Math.Max(1, (int)span.TotalSeconds)} s" : $"{(int)span.TotalMinutes} min";
+    }
+
+    private async Task AcknowledgeAsync(AlarmView alarm) => Ui.Show(await Api.AcknowledgeAsync(alarm.Id));
+
+    private void ConfirmAction(AlarmView alarm)
+    {
+        var text = alarm.Action switch
+        {
+            AlarmAction.ResetTaxi => $"Only reset {alarm.Source} once the aisle is clear of people and objects. It carries on with its job.",
+            AlarmAction.ResetLift => $"Only reset {alarm.Source} once the shaft is clear. Taxis waiting for it carry on.",
+            AlarmAction.ResetConveyor => "Only reset once the jammed pallet is cleared and nobody is near the rollers.",
+            _ => "Confirm the pallet has been fixed: restacked, re-wrapped or relabelled. It goes back on the infeed and is checked again.",
+        };
+        _confirm = new(
+            $"{alarm.ActionLabel}?",
+            text,
+            alarm.ActionLabel ?? "Confirm",
+            async () => Ui.Show(await Api.AlarmActionAsync(alarm.Id)),
+            alarm.Action == AlarmAction.Reinduct ? "primary" : "danger");
+    }
+}

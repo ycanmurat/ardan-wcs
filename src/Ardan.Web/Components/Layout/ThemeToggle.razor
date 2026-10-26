@@ -1,0 +1,21 @@
+@inject IJSRuntime JS
+
+<Tip Text="@(_theme == "dark" ? "Switch to the light theme" : "Switch to the dark theme, easier on the eyes in a dim control room")" Side="top">
+    <button type="button" class="icon-btn theme-toggle" @onclick="ToggleAsync" aria-label="Switch theme">
+        <Icon Name="@(_theme == "dark" ? "sun" : "moon")" Size="17" />
+    </button>
+</Tip>
+
+@code {
+    private string _theme = "light";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _theme = await JS.InvokeAsync<string>("ardan.theme");
+        StateHasChanged();
+    }
+
+    private async Task ToggleAsync() =>
+        _theme = await JS.InvokeAsync<string>("ardan.setTheme", _theme == "dark" ? "light" : "dark");
+}

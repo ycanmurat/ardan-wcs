@@ -1,0 +1,20 @@
+<span class="battery tone-@Tone" aria-label="Battery @Display.Num(Value, "0")%">
+    <span class="battery-shell"><span class="battery-fill" style="width: @Display.Num(Math.Clamp(Value, 0, 100), "0.#")%"></span></span>
+    <span class="battery-value">@Display.Num(Value, "0")%</span>
+    @if (Charging)
+    {
+        <Icon Name="bolt" Size="13" Class="battery-bolt" />
+    }
+</span>
+
+@code {
+    [Parameter] public double Value { get; set; }
+    [Parameter] public bool Charging { get; set; }
+
+    private string Tone => Value switch
+    {
+        < 20 => "crit",
+        < 35 => "warn",
+        _ => "ok",
+    };
+}

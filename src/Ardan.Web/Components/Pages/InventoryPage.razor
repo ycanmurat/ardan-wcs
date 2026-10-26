@@ -1,0 +1,227 @@
+@page "/inventory"
+@inherits LiveComponent
+@inject WcsApi Api
+@inject NavigationManager Nav
+
+<PageTitle>Inventory · Ardán</PageTitle>
+
+<PageHeader Title="Inventory" Subtitle="What is in store, where it is and when it expires. Oldest best-before leaves first." />
+
+@if (Live is { } live)
+{
+    var lanes = Feed.Lanes.ToList();
+    var expiring = lanes.Where(lane => lane.Expiry is { } expiry && Display.DaysLeft(expiry, Now) <= 3).Sum(lane => lane.Count);
+    var empty = lanes.Count(lane => lane.Count == 0 && !lane.Busy);
+    <div class="kpis kpis-4">
+        <KpiCard Label="Pallets in store" Value="@Display.Count(live.Kpis.Stored)" Unit="@($"of {Display.Count(live.Kpis.Capacity)}")"
+                 Help="Every pallet stored in the rack now.">
+            <span>@Display.Percent(live.Kpis.Occupancy) of all places</span>
+        </KpiCard>
+        <KpiCard Label="Products in stock" Value="@_skus.Count(sku => sku.Pallets > 0).ToString()" Unit="@($"of {_skus.Count}")"
+                 Help="Products from the item master with at least one pallet in store.">
+            <span>@_skus.Count(sku => sku.Pallets == 0) out of stock</span>
+        </KpiCard>
+        <KpiCard Label="Best before within 3 days" Value="@expiring.ToString()" Unit="pallets" Tone="@(expiring > 0 ? "warn" : null)"
+                 Help="Pallets whose best-before date is today or in the next three days. They leave first on the next order for their product.">
+            <span>Shown in amber on the live view</span>
+        </KpiCard>
+        <KpiCard Label="Empty lanes" Value="@empty.ToString()" Unit="@($"of {lanes.Count}")"
+                 Help="Lanes with no pallets and no Taxi on its way. Each new batch needs an empty lane, or a lane with the same batch.">
+            <span>Ready for new batches</span>
+        </KpiCard>
+    </div>
+}
+
+<div class="grid inventory-grid">
+    <section class="card">
+        <CardHeader Title="Products" Help="Every product in the item master. Free is what is left after open orders take their share." />
+        <label class="search-field">
+            <Icon Name="search" Size="15" />
+            <input class="input" placeholder="Filter by name, code or category" @bind="_filter" @bind:event="oninput" aria-label="Filter products" />
+        </label>
+        <div class="table-wrap">
+            <table class="table is-clickable">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Velocity <InfoTip Title="Velocity" Text="How often the product moves. A is stored near the VTUs, C at the back." Side="bottom" /></th>
+                        <th class="num">In store</th>
+                        <th class="num">Free</th>
+                        <th>Next best before</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var sku in Products)
+                    {
+                        <tr @key="sku.Code" class="@(sku.Code == _skuCode ? "is-selected" : null)" @onclick="() => SelectSku(sku.Code)">
+                            <td>@sku.Name<span class="sub">@sku.Code · @sku.Category</span></td>
+                            <td><StateBadge Look="Display.Look(sku.Velocity)" /></td>
+                            <td class="num">@sku.Pallets</td>
+                            <td class="num">@sku.Free</td>
+                            <td>
+                                @if (sku.NextExpiry is { } next)
+                                {
+                                    <span class="badge tone-@Display.ExpiryTone(next, Now)">@Display.Expiry(next, Now)</span>
+                                }
+                                else
+                                {
+                                    <span class="muted">Out of stock</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card">
+        @if (SelectedSku is not { } chosen)
+        {
+            <EmptyState Icon="inventory" Tone="neutral" Title="Choose a product" Text="Its pallets appear here in best-before order, with where each one is." />
+        }
+        else
+        {
+            <CardHeader Title="@chosen.Name" Help="Pallets in best-before order. The first row is the next to leave on an outbound order." />
+            <div class="chips">
+                <span class="chip">@chosen.Code</span>
+                <span class="chip">@chosen.Category</span>
+                <span class="chip">@chosen.CasesPerPallet cases per pallet</span>
+                <span class="chip">@chosen.Lanes @(chosen.Lanes == 1 ? "lane" : "lanes")</span>
+                <a class="chip is-link" href="live">See it on the live view <Icon Name="chevron-right" Size="13" /></a>
+                <a class="chip is-link" href="@($"orders?new={chosen.Code}")">New order for this product <Icon Name="chevron-right" Size="13" /></a>
+            </div>
+            if (_pallets.Count == 0)
+            {
+                <EmptyState Icon="pallet" Tone="neutral" Title="None in store" Text="Create an inbound order to receive this product." />
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="table is-clickable">
+                        <thead>
+                            <tr>
+                                <th>Pallet</th>
+                                <th>Batch</th>
+                                <th>Best before</th>
+                                <th>Where</th>
+                                <th class="num">Weight</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var pallet in _pallets)
+                            {
+                                <tr @key="pallet.Id" class="@(pallet.Id == PalletId ? "is-selected" : null)" @onclick="() => OpenPallet(pallet.Id)">
+                                    <td class="nowrap"><strong>@pallet.Id</strong></td>
+                                    <td class="nowrap">@pallet.Batch</td>
+                                    <td><span class="badge tone-@Display.ExpiryTone(pallet.Expiry, Now)">@Display.Expiry(pallet.Expiry, Now)</span></td>
+                                    <td>@pallet.Location</td>
+                                    <td class="num nowrap">@Display.Count(pallet.WeightKg) kg</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </section>
+</div>
+
+<Drawer Open="_palletDetail is not null" Kicker="Pallet" Title="@(_palletDetail?.Pallet.Id ?? "")" Subtitle="@_palletDetail?.Pallet.SkuName" OnClose="ClosePallet">
+    @if (_palletDetail is { } detail)
+    {
+        var pallet = detail.Pallet;
+        <div class="drawer-state">
+            <Badge Text="@Display.Label(pallet.Status)" Tone="@(pallet.Status is PalletStatus.Rejected ? "warn" : pallet.Status is PalletStatus.Stored ? "ok" : "info")" />
+            <span class="badge tone-@Display.ExpiryTone(pallet.Expiry, Now)">Best before @Display.Day(pallet.Expiry)</span>
+        </div>
+        <dl class="facts">
+            <Fact Label="Where">@pallet.Location</Fact>
+            <Fact Label="Product">@pallet.SkuName (@pallet.SkuCode)</Fact>
+            <Fact Label="Batch">@pallet.Batch</Fact>
+            <Fact Label="Weight" Help="The profile check rejects pallets over 1,500 kg.">@Display.Count(pallet.WeightKg) kg</Fact>
+            <Fact Label="Height" Help="The profile check rejects pallets over 1,800 mm.">@Display.Count(pallet.HeightMm) mm</Fact>
+            <Fact Label="Received">@Display.Date(pallet.ReceivedAt)</Fact>
+            @if (pallet.OrderId is not null)
+            {
+                <Fact Label="Order"><a href="@($"orders?select={pallet.OrderId}")">@pallet.OrderId</a></Fact>
+            }
+        </dl>
+        <h3 class="drawer-section">History</h3>
+        if (detail.History.Count == 0)
+        {
+            <p class="muted">Stored before the control server started, so there is no history yet.</p>
+        }
+        else
+        {
+            <ol class="timeline">
+                @foreach (var move in detail.History)
+                {
+                    <li class="timeline-item tone-@(move.Kind == MovementKind.Rejected ? "warn" : "brand")">
+                        <span class="timeline-dot"></span>
+                        <div>
+                            <strong>@Display.Label(move.Kind)</strong>
+                            <span class="muted">@move.From → @move.To@(move.By is null ? null : $" · by {move.By}")</span>
+                        </div>
+                        <time>@Display.Date(move.Time)</time>
+                    </li>
+                }
+            </ol>
+        }
+    }
+</Drawer>
+
+@code {
+    private IReadOnlyList<SkuView> _skus = [];
+    private IReadOnlyList<PalletView> _pallets = [];
+    private PalletDetail? _palletDetail;
+    private string? _skuCode;
+    private string? _loadedPallet;
+    private string _filter = "";
+
+    [SupplyParameterFromQuery(Name = "sku")] public string? Sku { get; set; }
+
+    [SupplyParameterFromQuery(Name = "pallet")] public string? PalletId { get; set; }
+
+    protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(4);
+
+    private SkuView? SelectedSku => _skuCode is null ? null : _skus.FirstOrDefault(sku => sku.Code == _skuCode);
+
+    private IEnumerable<SkuView> Products => _filter.Trim() is { Length: > 0 } text
+        ? _skus.Where(sku =>
+            sku.Name.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || sku.Code.Contains(text, StringComparison.OrdinalIgnoreCase)
+            || sku.Category.Contains(text, StringComparison.OrdinalIgnoreCase))
+        : _skus;
+
+    protected override async Task OnInitializedAsync() => _skus = await Api.SkusAsync();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (PalletId != _loadedPallet)
+        {
+            _loadedPallet = PalletId;
+            _palletDetail = PalletId is null ? null : await Api.PalletAsync(PalletId);
+        }
+
+        var sku = Sku ?? _palletDetail?.Pallet.SkuCode ?? _skuCode;
+        if (sku != _skuCode)
+        {
+            _skuCode = sku;
+            _pallets = sku is null ? [] : await Api.PalletsOfAsync(sku);
+        }
+    }
+
+    protected override async Task OnLiveAsync()
+    {
+        _skus = await Api.SkusAsync();
+        if (_skuCode is not null) _pallets = await Api.PalletsOfAsync(_skuCode);
+        if (_loadedPallet is not null) _palletDetail = await Api.PalletAsync(_loadedPallet) ?? _palletDetail;
+    }
+
+    private void SelectSku(string code) => Nav.NavigateTo($"inventory?sku={code}", replace: true);
+
+    private void OpenPallet(string id) => Nav.NavigateTo($"inventory?sku={_skuCode}&pallet={id}", replace: true);
+
+    private void ClosePallet() => Nav.NavigateTo(_skuCode is null ? "inventory" : $"inventory?sku={_skuCode}", replace: true);
+}

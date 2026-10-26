@@ -1,0 +1,20 @@
+<span class="tip @Class" tabindex="@(Focusable ? "0" : null)" aria-label="@AriaLabel">
+    @ChildContent
+    <span class="tip-bubble tip-@Side" role="tooltip">
+        @if (!string.IsNullOrEmpty(Title))
+        {
+            <strong class="tip-title">@Title</strong>
+        }
+        <span class="tip-text">@Text</span>
+    </span>
+</span>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+    [Parameter] public string Side { get; set; } = "top";
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public bool Focusable { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+}

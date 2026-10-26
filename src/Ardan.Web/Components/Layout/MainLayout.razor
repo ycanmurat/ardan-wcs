@@ -1,0 +1,58 @@
+﻿@inherits LayoutComponentBase
+@implements IAsyncDisposable
+@inject UiState Ui
+@inject IJSRuntime JS
+
+<div class="shell">
+    <Sidebar />
+    <div class="workspace">
+        <TopBar />
+        <main class="content">
+            <FeedBanner />
+            @Body
+        </main>
+    </div>
+</div>
+
+<HelpPanel />
+<SearchPalette />
+<Toasts />
+
+<div id="blazor-error-ui" data-nosnippet>
+    Something went wrong on this screen.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">✕</span>
+</div>
+
+@code {
+    private DotNetObjectReference<MainLayout>? _self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("ardan.listen", _self);
+    }
+
+    [JSInvokable]
+    public void OpenSearch() => Ui.OpenSearch();
+
+    [JSInvokable]
+    public void ToggleHelp() => Ui.ToggleHelp();
+
+    [JSInvokable]
+    public void CloseOverlays() => Ui.CloseOverlays();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_self is null) return;
+        try
+        {
+            await JS.InvokeVoidAsync("ardan.unlisten");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        _self.Dispose();
+    }
+}

@@ -1,0 +1,9 @@
+<Tip Title="@Title" Text="@Text" Side="@Side" Class="info-tip" Focusable AriaLabel="@($"About {Title}")">
+    <Icon Name="info" Size="15" />
+</Tip>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+    [Parameter] public string Side { get; set; } = "top";
+}

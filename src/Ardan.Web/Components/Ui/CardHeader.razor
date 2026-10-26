@@ -1,0 +1,19 @@
+<header class="card-head">
+    <div class="card-title">
+        <h2>@Title</h2>
+        @if (Help is not null)
+        {
+            <InfoTip Title="@Title" Text="@Help" />
+        }
+    </div>
+    @if (ChildContent is not null)
+    {
+        <div class="card-actions">@ChildContent</div>
+    }
+</header>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Help { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,21 @@
+@implements IDisposable
+@inject UiState Ui
+
+<div class="toasts" role="status" aria-live="polite">
+    @foreach (var toast in Ui.Toasts)
+    {
+        <div class="toast tone-@toast.Tone" @key="toast.Id">
+            <Icon Name="@(toast.Tone == "ok" ? "check" : "warning")" Size="16" />
+            <span>@toast.Text</span>
+            <button type="button" class="icon-btn" aria-label="Dismiss" @onclick="() => Ui.Dismiss(toast)"><Icon Name="x" Size="14" /></button>
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Ui.Changed += Redraw;
+
+    private void Redraw() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Ui.Changed -= Redraw;
+}
