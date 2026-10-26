@@ -71,21 +71,21 @@
 }
 
 :root[data-theme="dark"] {
-    --bg: #0f1512;
-    --sidebar-bg: #121916;
-    --surface: #161e1a;
-    --surface-2: #1b2420;
-    --surface-3: #27312b;
-    --border: #25302a;
-    --border-strong: #354239;
-    --text: #e7ede8;
-    --text-2: #afbbb2;
-    --text-3: #7f8b83;
+    --bg: #101318;
+    --sidebar-bg: #14181e;
+    --surface: #1b2028;
+    --surface-2: #222933;
+    --surface-3: #303a46;
+    --border: #303843;
+    --border-strong: #465363;
+    --text: #f0f3f7;
+    --text-2: #bdc7d3;
+    --text-3: #97a5b6;
 
-    --brand: #35a874;
-    --brand-strong: #2d9366;
-    --brand-soft: rgba(53, 168, 116, 0.14);
-    --brand-text: #73d2a5;
+    --brand: #54c393;
+    --brand-strong: #70d3a8;
+    --brand-soft: rgba(84, 195, 147, 0.1);
+    --brand-text: #8cdeba;
     --on-brand: #06140d;
     --gold: #e6bb52;
 
@@ -101,28 +101,28 @@
     --crit: #eb6a52;
     --crit-soft: rgba(235, 106, 82, 0.16);
     --crit-text: #f5a493;
-    --neutral: #87948c;
-    --neutral-soft: rgba(135, 148, 140, 0.15);
-    --neutral-text: #b8c3bc;
+    --neutral: #97a5b6;
+    --neutral-soft: rgba(151, 165, 182, 0.12);
+    --neutral-text: #c6d0dc;
     --on-tone: #0b120e;
 
     --focus: #6aa7eb;
-    --tip-bg: #e8eee9;
-    --tip-text: #0f1612;
+    --tip-bg: #303a46;
+    --tip-text: #f0f3f7;
     --scrim: rgba(0, 0, 0, 0.56);
     --scrim-soft: rgba(0, 0, 0, 0.34);
-    --row-hover: #1a231f;
+    --row-hover: #252e39;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.12);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.22);
     --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 
-    --lane-bg: #1b2520;
-    --lane-border: #2e3a33;
-    --pip-empty: #27322c;
-    --rail: #3e4b43;
+    --lane-bg: #222933;
+    --lane-border: #3c4857;
+    --pip-empty: #35404e;
+    --rail: #526174;
     --roller: rgba(255, 255, 255, 0.08);
-    --belt-bg: #1b241f;
+    --belt-bg: #222933;
     --pallet: #b78a51;
     --pallet-base: #876337;
     --week: #d2bd52;
@@ -1021,7 +1021,7 @@ select.input {
 }
 
 :root[data-theme="dark"] .tip-note {
-    color: #2a62a3;
+    color: #a8ccf4;
 }
 
 .tip-below .marker-tip,
@@ -3049,6 +3049,248 @@ body:has(.drawer) .toasts {
 .rules span {
     color: var(--text-2);
     line-height: 1.5;
+}
+
+/* Dark workspace: separate navigation, content and controls without extra chrome. */
+
+:root[data-theme="dark"] .content {
+    gap: 24px;
+    padding-top: 32px;
+}
+
+:root[data-theme="dark"] .page-head {
+    gap: 16px;
+    margin-bottom: 0;
+}
+
+:root[data-theme="dark"] .page-head h1 {
+    font-size: 28px;
+    line-height: 1.2;
+}
+
+:root[data-theme="dark"] .page-sub {
+    margin-top: 8px;
+    line-height: 1.6;
+}
+
+:root[data-theme="dark"] .grid,
+:root[data-theme="dark"] .live-grid,
+:root[data-theme="dark"] .live-side,
+:root[data-theme="dark"] .alarm-list {
+    gap: 24px;
+}
+
+:root[data-theme="dark"] .card {
+    --panel-padding: 22px;
+    padding: var(--panel-padding);
+}
+
+:root[data-theme="dark"] .rack-card {
+    --panel-padding: 18px;
+    padding-bottom: 14px;
+}
+
+:root[data-theme="dark"] .card-head {
+    margin-bottom: 20px;
+}
+
+:root[data-theme="dark"] .card-title h2 {
+    font-size: 15px;
+}
+
+:root[data-theme="dark"] .kpi {
+    gap: 12px;
+}
+
+:root[data-theme="dark"] .kpi-value {
+    font-weight: 600;
+    letter-spacing: -0.03em;
+}
+
+:root[data-theme="dark"] .nav-item.is-active {
+    background: var(--brand-soft);
+    box-shadow: none;
+}
+
+:root[data-theme="dark"] .site,
+:root[data-theme="dark"] .sidebar-help {
+    background: transparent;
+}
+
+:root[data-theme="dark"] .nav {
+    gap: 5px;
+}
+
+:root[data-theme="dark"] .search-trigger,
+:root[data-theme="dark"] .input {
+    background-color: var(--bg);
+}
+
+:root[data-theme="dark"] .segmented {
+    background: var(--bg);
+    border-color: var(--border);
+}
+
+:root[data-theme="dark"] .segment.is-active {
+    background: var(--surface-3);
+    color: var(--text);
+}
+
+:root[data-theme="dark"] .btn:not(.btn-sm) {
+    min-height: 40px;
+}
+
+:root[data-theme="dark"] .units {
+    gap: 14px;
+}
+
+:root[data-theme="dark"] .unit {
+    gap: 12px;
+    padding: 16px 16px 16px 18px;
+    background: var(--bg);
+}
+
+:root[data-theme="dark"] .table-wrap {
+    margin-right: calc(-1 * var(--panel-padding, 22px));
+    margin-left: calc(-1 * var(--panel-padding, 22px));
+}
+
+:root[data-theme="dark"] th {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    background: color-mix(in srgb, var(--bg) 50%, var(--surface));
+    color: var(--text-2);
+}
+
+:root[data-theme="dark"] td {
+    padding-top: 14px;
+    padding-bottom: 14px;
+}
+
+:root[data-theme="dark"] :is(th, td):first-child {
+    padding-left: var(--panel-padding, 22px);
+}
+
+:root[data-theme="dark"] :is(th, td):last-child {
+    padding-right: var(--panel-padding, 22px);
+}
+
+:root[data-theme="dark"] .alarm-head {
+    padding: 22px 22px 0 24px;
+}
+
+:root[data-theme="dark"] .alarm-title h2 {
+    margin-bottom: 6px;
+    font-size: 17px;
+}
+
+:root[data-theme="dark"] .alarm-body {
+    gap: 32px;
+    padding: 24px 24px 12px 74px;
+}
+
+:root[data-theme="dark"] .alarm-body h3 {
+    margin-bottom: 8px;
+    color: var(--text-2);
+}
+
+:root[data-theme="dark"] .alarm-body p {
+    max-width: 64ch;
+    margin-bottom: 20px;
+    line-height: 1.65;
+}
+
+:root[data-theme="dark"] .steps {
+    gap: 10px;
+    line-height: 1.65;
+}
+
+:root[data-theme="dark"] .alarm-foot {
+    gap: 16px;
+    padding: 16px 24px 18px 74px;
+    background: color-mix(in srgb, var(--bg) 45%, var(--surface));
+}
+
+@media (max-width: 960px) {
+    :root[data-theme="dark"] .shell {
+        grid-template-rows: auto 1fr;
+    }
+
+    :root[data-theme="dark"] .content {
+        gap: 20px;
+        padding-top: 24px;
+    }
+
+    :root[data-theme="dark"] .card {
+        --panel-padding: 18px;
+    }
+
+    :root[data-theme="dark"] .alarm-body {
+        gap: 12px;
+        padding: 20px 22px 4px;
+    }
+
+    :root[data-theme="dark"] .alarm-foot {
+        padding-left: 22px;
+    }
+}
+
+@media (max-width: 700px) {
+    :root[data-theme="dark"] .page-head h1 {
+        font-size: 24px;
+    }
+
+    :root[data-theme="dark"] .alarm-head {
+        padding: 20px 18px 0 20px;
+    }
+
+    :root[data-theme="dark"] .alarm-body,
+    :root[data-theme="dark"] .alarm-foot {
+        padding-right: 20px;
+        padding-left: 20px;
+    }
+
+    :root[data-theme="dark"] .alarm-actions {
+        width: 100%;
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 520px) {
+    :root[data-theme="dark"] .topbar {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr) 32px;
+        gap: 10px 12px;
+    }
+
+    :root[data-theme="dark"] .topbar-right {
+        display: contents;
+    }
+
+    :root[data-theme="dark"] .topbar-right > .tip:first-child {
+        justify-self: start;
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    :root[data-theme="dark"] .topbar-right > .icon-btn {
+        grid-column: 3;
+        grid-row: 1;
+    }
+
+    :root[data-theme="dark"] .topbar .tip:has(> .chip),
+    :root[data-theme="dark"] .topbar .tip:has(> .clock) {
+        display: none;
+    }
+
+    :root[data-theme="dark"] .topbar .speed {
+        grid-column: 1 / -1;
+        justify-content: space-between;
+    }
+
+    :root[data-theme="dark"] .topbar .speed-label {
+        display: inline;
+    }
 }
 
 /* Motion */
