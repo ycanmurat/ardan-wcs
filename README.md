@@ -50,6 +50,16 @@ dotnet run --project src/Ardan.Api
 dotnet run --project src/Ardan.Web
 ```
 
+With Docker, the way the live demo runs:
+
+```bash
+docker build -t ardan .
+docker run --rm -p 8080:8080 ardan
+```
+
+The container runs the tests while it builds, then starts the API on `127.0.0.1:5080` inside the container
+and serves the console on port 8080.
+
 Tests:
 
 ```bash

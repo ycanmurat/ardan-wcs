@@ -400,6 +400,14 @@ kbd {
     font-variant-numeric: tabular-nums;
 }
 
+.site-tag {
+    margin-left: auto;
+}
+
+.nav-external {
+    color: var(--text-3);
+}
+
 .nav-tag {
     padding: 1px 7px;
     border: 1px solid var(--border-strong);

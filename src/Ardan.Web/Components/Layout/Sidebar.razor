@@ -16,6 +16,9 @@
             <strong>@(Feed.Layout?.Company ?? "Connecting…")</strong>
             <small>@Feed.Layout?.Site</small>
         </div>
+        <Tip Title="Demo" Text="A simulated store with made-up data. Everyone who opens this page shares it, so the buttons are safe to try." Side="bottom" Class="site-tag">
+            <span class="nav-tag">Demo</span>
+        </Tip>
     </div>
 
     <nav class="nav" aria-label="Main">
@@ -27,6 +30,12 @@
         <NavItem Href="alarms" Icon="alarm" Label="Alarms" Count="@(Live?.ActiveAlarms.Count ?? 0)" Tone="@AlarmTone" />
         <span class="nav-heading">Next phase</span>
         <NavItem Href="insights" Icon="insights" Label="Insights" Tag="Planned" />
+        <span class="nav-heading">Code</span>
+        <a class="nav-item" href="@SourceUrl" target="_blank" rel="noopener">
+            <Icon Name="code" Size="18" />
+            <span class="nav-label">Source on GitHub</span>
+            <Icon Name="external" Size="14" Class="nav-external" />
+        </a>
     </nav>
 
     <div class="sidebar-foot">
@@ -40,6 +49,8 @@
 </aside>
 
 @code {
+    private const string SourceUrl = "https://github.com/ycanmurat/ardan-wcs";
+
     protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(1);
 
     private int Stopped =>

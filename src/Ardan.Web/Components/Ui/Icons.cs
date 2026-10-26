@@ -51,6 +51,8 @@ public static class Icons
         ["route"] = "M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M18 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M8 17h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7",
         ["gauge"] = "M4 17a8 8 0 1 1 16 0 M12 17l4-5",
         ["wrench"] = "M14.5 6.5a4 4 0 0 0 5 5L11 20a2 2 0 0 1-3-3l8.5-8.5z",
+        ["code"] = "M8 7l-5 5 5 5 M16 7l5 5-5 5 M13.5 4l-3 16",
+        ["external"] = "M14 4h6v6 M20 4l-9 9 M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
     };
 
     public static string PathOf(string name) => Paths.TryGetValue(name, out var path) ? path : Paths["info"];
