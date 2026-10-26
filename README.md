@@ -3,7 +3,7 @@
 A warehouse control system (WCS) concept for an automated pallet store, built end to end in .NET:
 a live simulation of the store, an HTTP and SignalR API, and an operator console in Blazor.
 
-Live Demo: https://ot3za7vkl6psnohzboiqkjms.hillbilisim.com
+Live Demo: https://yorusun.com/ardan-wcs/
 
 Source Code: https://github.com/ycanmurat/ardan-wcs
 
@@ -63,6 +63,11 @@ docker run --rm -p 8080:8080 ardan
 
 The container runs the tests while it builds, then starts the API on `127.0.0.1:5080` inside the container
 and serves the console on port 8080.
+
+The production console is mounted at `/ardan-wcs` on the existing portfolio domain.
+In Coolify, route `https://yorusun.com:8080/ardan-wcs` to this application and set
+**Advanced → Proxy → Path prefixes** to **Keep paths as-is**. No new DNS record is needed
+for this path. Root hosting remains supported for local runs and generated application domains.
 
 Tests:
 
