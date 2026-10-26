@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ardan.Api/Ardan.Api.csproj" />
+    <Project Path="src/Ardan.Core/Ardan.Core.csproj" />
+    <Project Path="src/Ardan.Web/Ardan.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ardan.Core.Tests/Ardan.Core.Tests.csproj" />
+  </Folder>
+</Solution>
