@@ -5,7 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <base href="/" />
+    <base href="@BasePath" />
     <script src="@Assets["app.js"]"></script>
     <ResourcePreloader />
     <link rel="icon" type="image/svg+xml" href="@Assets["favicon.svg"]" />
@@ -22,3 +22,9 @@
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    private string BasePath => $"{HttpContext?.Request.PathBase}/";
+}

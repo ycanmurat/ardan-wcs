@@ -125,7 +125,7 @@
     private void Go(SearchHit hit)
     {
         Ui.CloseOverlays();
-        Nav.NavigateTo(hit.Link);
+        Nav.NavigateTo(hit.Link.TrimStart('/'));
     }
 
     private void Redraw() => _ = InvokeAsync(StateHasChanged);
