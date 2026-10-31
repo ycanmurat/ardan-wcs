@@ -127,9 +127,9 @@ public sealed partial class Warehouse
             _pallets.Remove(pallet.Id);
             _journal.PalletChanged(pallet);
             foreach (var alarm in Alarms.Active.Where(alarm => alarm.Subject == pallet.Id).ToList())
-                Alarms.Clear(alarm, Now, "Supervisor");
+                Alarms.Clear(alarm, Now, Supervisor);
 
-            _journal.Moved(new Movement(pallet.Id, Now, MovementKind.Returned, "Reject lane", "Supplier", "Supervisor"));
+            _journal.Moved(new Movement(pallet.Id, Now, MovementKind.Returned, "Reject lane", "Supplier", Supervisor));
             Events.Add(Now, EventKind.Info, $"{pallet.Id} returned to the supplier by the supervisor", pallet.Id);
 
             if (OrderOf(pallet) is not { } order) continue;

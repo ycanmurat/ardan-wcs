@@ -2,6 +2,7 @@
 @inherits LiveComponent
 @inject WcsApi Api
 @inject UiState Ui
+@inject OperatorCommands Commands
 @inject NavigationManager Nav
 
 <PageTitle>Orders · Ardán</PageTitle>
@@ -9,6 +10,20 @@
 <PageHeader Title="Orders" Subtitle="@Subtitle">
     <button type="button" class="btn btn-primary" @onclick="OpenFormAsync"><Icon Name="plus" Size="16" />New order</button>
 </PageHeader>
+
+@if (Live is { } live)
+{
+    var k = live.Kpis;
+    var shift = live.Shift;
+    <div class="stat-strip">
+        <StatTile Icon="orders" Label="Open orders" Value="@k.OpenOrders.ToString()" Tone="brand" />
+        <StatTile Icon="clock" Label="Due within 30 min" Value="@k.DueSoon.ToString()" Tone="@(k.DueSoon > 0 ? "warn" : "neutral")" />
+        <StatTile Icon="warning" Label="Late" Value="@k.Late.ToString()" Tone="@(k.Late > 0 ? "crit" : "neutral")" />
+        <StatTile Icon="pallet" Label="Short or need a fix" Value="@live.Orders.Exceptions.ToString()" Tone="@(live.Orders.Exceptions > 0 ? "warn" : "neutral")" />
+        <StatTile Icon="trophy" Label="On time this shift" Value="@(shift.OrdersRated == 0 ? "—" : shift.OrdersOnTime.ToString())"
+                  Unit="@(shift.OrdersRated == 0 ? null : $"of {shift.OrdersRated}")" Tone="gold" />
+    </div>
+}
 
 <section class="card">
     @{
@@ -360,18 +375,7 @@
         await LoadAsync();
     }
 
-    private void ConfirmCancel(OrderView order) => _confirm = new(
-        $"Cancel {order.Id}?",
-        order.InFlight > 0
-            ? $"No new work starts. {order.InFlight} {(order.InFlight == 1 ? "pallet is" : "pallets are")} already on the move and finish their trip."
-            : "No new work starts and the order closes now.",
-        "Cancel order",
-        async () =>
-        {
-            Ui.Show(await Api.CancelOrderAsync(order.Id));
-            await LoadAsync();
-        },
-        "danger");
+    private void ConfirmCancel(OrderView order) => _confirm = Commands.CancelOrder(order, LoadAsync);
 
     private async Task OpenFormAsync()
     {

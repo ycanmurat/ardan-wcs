@@ -11,6 +11,7 @@ namespace Ardan.Core.Contracts;
 public static class ViewBuilder
 {
     private const int EventsShown = 14;
+    private const int ScoreEventsShown = 8;
     private const int SearchLimit = 12;
     private const int ThroughputMinutes = ThroughputMeter.Hour + 9;
 
@@ -20,6 +21,7 @@ public static class ViewBuilder
         w.Layout.LaneDepth,
         w.Layout.BayPitchMetres,
         w.Layout.LevelHeightMetres,
+        w.Layout.PalletPitchMetres,
         w.Lifts.Select(lift => lift.Id).ToList(),
         DemoSite.Company,
         DemoSite.Site);
@@ -65,8 +67,24 @@ public static class ViewBuilder
             active.OrderByDescending(a => a.Severity).ThenByDescending(a => a.RaisedAt).Select(ToView).ToList(),
             w.Events.Latest(EventsShown).Select(ToView).ToList(),
             orders,
-            new ClimateView(w.Climate.TemperatureC, Limits.StoreMinC, Limits.StoreMaxC));
+            new ClimateView(w.Climate.TemperatureC, Limits.StoreMinC, Limits.StoreMaxC),
+            Shift(w.Score),
+            Advisor.Suggest(w));
     }
+
+    public static ShiftView Shift(ShiftScore score) => new(
+        score.StartedAt,
+        score.Points,
+        score.Earned,
+        score.Level,
+        score.LevelFrom,
+        score.LevelTo,
+        score.Stars,
+        score.OrdersRated,
+        score.OrdersOnTime,
+        score.GoalsDone,
+        score.Goals.Select(goal => new GoalView(goal.Kind, goal.Title, goal.Tier, Math.Round(goal.Progress, 1), goal.Target, goal.Reward)).ToList(),
+        score.Latest(ScoreEventsShown).ToList());
 
     public static IReadOnlyList<LaneView> Lanes(Warehouse w) =>
         w.Grid.Lanes.Select(lane => ToView(w, lane)).ToList();
@@ -218,6 +236,9 @@ public static class ViewBuilder
         taxi.Load is null ? null : w.NameOf(taxi.Load.SkuCode),
         taxi.Job?.Id,
         taxi.Job?.Kind,
+        taxi.Job?.From is { } from ? Spot(from) : null,
+        taxi.Job?.To is { } to ? Spot(to) : null,
+        Handling(taxi),
         taxi.Lift?.Id,
         taxi.SpeedMs,
         Math.Round(taxi.MotorTempC, 1),
@@ -227,6 +248,23 @@ public static class ViewBuilder
         taxi.ChargeHold,
         taxi.FaultCode,
         Activity(taxi));
+
+    /// <summary>A place as the screens name it: Infeed, Outfeed or a lane such as L2·B05.</summary>
+    public static string Spot(Place place) => place.Kind switch
+    {
+        PlaceKind.Infeed => "Infeed",
+        PlaceKind.Outfeed => "Outfeed",
+        _ => place.Lane.ToString(),
+    };
+
+    /// <summary>How far a Taxi is through picking up or setting down a pallet, from 0 to 1. Null when it is not handling one.</summary>
+    private static double? Handling(Taxi taxi) =>
+        taxi.State is TaxiState.Loading or TaxiState.Unloading
+        && taxi.TransferLeft is { } left
+        && taxi.Route.TryPeek(out var leg)
+        && leg is Transfer { Seconds: > 0 } transfer
+            ? Math.Round(Math.Clamp(1 - left / transfer.Seconds, 0, 1), 3)
+            : null;
 
     private static LiftView ToView(Lift lift)
     {

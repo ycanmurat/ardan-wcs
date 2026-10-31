@@ -1,146 +1,124 @@
 @page "/live"
 @inherits LiveComponent
 @inject WcsApi Api
+@inject OperatorCommands Commands
 
 <PageTitle>Live system · Ardán</PageTitle>
 
-<PageHeader Title="Live system" Subtitle="Front view of the rack, as seen from the dock. Updated four times a second.">
-    <div class="field-inline">
-        <span class="field-label">Colour lanes by <InfoTip Title="Colour lanes by" Text="Fill shows stored pallets and flags stock that expires within 3 days. Velocity shows how often a product moves. Expiry shows days left." Side="bottom" /></span>
-        <Segmented Choices="Colours" Value="@_colour.ToString()" ValueChanged="SetColour" Label="Colour lanes by" />
-    </div>
-</PageHeader>
+<div class="game @(_flat ? "is-flat" : null)">
+    <h1 class="sr-only">Live system</h1>
 
-<div class="live-grid">
-    <section class="card rack-card">
-        <RackView Colour="_colour" Product="@_product" SelectedLane="_lane" SelectedTaxi="@_taxi" Velocities="_velocities"
-                  OnLaneSelected="SelectLaneAsync" OnTaxiSelected="SelectTaxi" />
-        <ul class="rack-legend">
-            @foreach (var (swatch, text) in Legend())
+    @if (!_flat)
+    {
+        <WorldView @ref="_world" Colour="_colour" Product="@_product" Highlight="@Highlight" Velocities="_velocities" Labels="_labels"
+                   OnPick="SelectAsync" OnImmersive="on => _immersive = on" OnUnavailable="UseFlat" />
+    }
+
+    @if (Live is { } live)
+    {
+        <div class="hud">
+            @if (_flat)
             {
-                <li><i class="swatch @swatch"></i>@text</li>
+                <div class="hud-stage">
+                    <section class="card rack-card">
+                        <RackView Colour="_colour" Product="@_product" SelectedLane="SelectedLane" SelectedTaxi="@SelectedTaxi" Velocities="_velocities"
+                                  OnLaneSelected="lane => SelectAsync(Selection.Lane(lane.Level, lane.Bay))"
+                                  OnTaxiSelected="id => SelectAsync(new Selection(SelectionKind.Taxi, id))" />
+                    </section>
+                </div>
             }
-        </ul>
-    </section>
-
-    <aside class="live-side">
-        <section class="card">
-            <CardHeader Title="Find a product" Help="Lights up every lane that holds the product. Other lanes fade so you can see where it is stored." />
-            <select class="input" value="@(_product ?? "")" @onchange="SelectProduct" aria-label="Product to find">
-                <option value="">All products</option>
-                @foreach (var sku in _skus)
+            <HudTop Live="live" OnGoals="() => _tab = GoalsTab" OnAlarms="FocusFirstAlarmAsync" />
+            <div class="hud-left">
+                <HudBoard @bind-Tab="_tab" Orders="_orders" Offers="Offers" Goals="live.Shift.Goals" Now="live.Time" Busy="@_accepting"
+                          SelectedOrder="@(_selected is { Kind: SelectionKind.Order } order ? order.Id : null)"
+                          OnSelectOrder="SelectOrderAsync" OnAccept="AcceptAsync" OnDismiss="offer => _dismissed.Add(offer.Id)" />
+            </div>
+            <div class="hud-right">
+                @if (_selected is { } selected)
                 {
-                    <option value="@sku.Code">@sku.Name (@sku.Code)</option>
+                    <Inspector Selected="selected" Live="live" Lane="_lane" Orders="_orders" OnClose="() => SelectAsync(null)"
+                               OnConfirm="confirmation => _confirm = confirmation" OnFind="code => _product = code" OnChanged="LoadOrdersAsync" />
                 }
-            </select>
-            @if (FoundSku is { } found)
+                <HudRail Live="live" @bind-Flat="_flat" @bind-Labels="_labels" Immersive="_immersive" @bind-Colour="_colour" @bind-Product="_product"
+                         Skus="_skus" OnCommand="CommandAsync" />
+            </div>
+            <HudAlerts Live="live" OnSelect="SelectAlarmAsync" OnFix="alarm => _confirm = Commands.AlarmFix(alarm)" />
+            @if (_banner is { } banner)
             {
-                <p class="find-result">
-                    <strong>@found.Pallets pallets</strong> in @found.Lanes @(found.Lanes == 1 ? "lane" : "lanes")
-                    @if (found.NextExpiry is { } next)
+                <div class="hud-banner" role="status" @key="banner.Seq">
+                    <Icon Name="@(banner.Kind == ScoreKind.Level ? "trophy" : "flag")" Size="18" />
+                    <span>@banner.Text</span>
+                    @if (banner.Points > 0)
                     {
-                        <span>· oldest best before @Display.Day(next)</span>
+                        <strong>+@banner.Points</strong>
                     }
-                </p>
+                </div>
             }
-        </section>
-
-        <section class="card selection">
-            @if (SelectedTaxiView is { } taxi)
-            {
-                var look = Display.Look(taxi.State);
-                <header class="selection-head">
-                    <div>
-                        <span class="drawer-kicker">Taxi</span>
-                        <h2>@taxi.Id</h2>
-                    </div>
-                    <button type="button" class="icon-btn" @onclick="ClearSelection" aria-label="Clear selection"><Icon Name="x" /></button>
-                </header>
-                <StateBadge Look="look" Side="bottom" />
-                <p class="selection-activity">@taxi.Activity</p>
-                <dl class="facts">
-                    <Fact Label="Battery"><BatteryMeter Value="taxi.Battery" Charging="taxi.State == TaxiState.Charging" /></Fact>
-                    <Fact Label="Where">@(taxi.State == TaxiState.OnLift && taxi.LiftId is not null ? $"On {taxi.LiftId}" : taxi.X < 0.05 ? $"Dock, level {taxi.Level}" : $"Level {taxi.Level}, bay {Display.Num(taxi.X, "0.0")}")</Fact>
-                    <Fact Label="Speed">@Display.Num(taxi.SpeedMs, "0.0") m/s</Fact>
-                    <Fact Label="Carrying">@(taxi.PalletId is null ? "Nothing" : $"{taxi.PalletId} · {taxi.SkuName}")</Fact>
-                </dl>
-                <a class="btn btn-block" href="@($"fleet?select={taxi.Id}")">Open in Fleet <Icon Name="chevron-right" Size="15" /></a>
-            }
-            else if (_detail is { } detail)
-            {
-                var lane = detail.Lane;
-                <header class="selection-head">
-                    <div>
-                        <span class="drawer-kicker">Lane</span>
-                        <h2>L@(lane.Level)·B@(lane.Bay.ToString("00"))</h2>
-                    </div>
-                    <button type="button" class="icon-btn" @onclick="ClearSelection" aria-label="Clear selection"><Icon Name="x" /></button>
-                </header>
-                if (lane.SkuName is null)
-                {
-                    <p class="muted">Empty. The next batch that needs a lane at this level and distance can go here.</p>
-                }
-                else
-                {
-                    <p class="selection-activity"><strong>@lane.SkuName</strong> · batch @lane.Batch</p>
-                    <div class="lane-meter">
-                        <ProgressBar Value="lane.Count" Max="lane.Depth" />
-                        <span>@lane.Count of @lane.Depth places</span>
-                    </div>
-                    <ol class="lane-pallets">
-                        @foreach (var pallet in detail.Pallets)
-                        {
-                            <li>
-                                <a href="@($"inventory?pallet={pallet.Id}")">@pallet.Id</a>
-                                <span class="muted">@pallet.WeightKg kg</span>
-                                <span class="badge tone-@Display.ExpiryTone(pallet.Expiry, Now)">@Display.Expiry(pallet.Expiry, Now)</span>
-                            </li>
-                        }
-                    </ol>
-                    <p class="hint">The top pallet is the next to leave. Each lane holds one batch, so its pallets share a best-before date.</p>
-                }
-                if (lane.Busy)
-                {
-                    <p class="note tone-info"><Icon Name="taxi" Size="15" />A Taxi is on its way to this lane.</p>
-                }
-            }
-            else
-            {
-                <EmptyState Icon="map" Tone="neutral" Title="Nothing selected" Text="Click a lane to see its pallets, or a Taxi to see what it is doing." />
-            }
-        </section>
-    </aside>
+        </div>
+    }
+    else
+    {
+        <div class="game-wait"><Waiting /></div>
+    }
 </div>
 
-@code {
-    private static readonly IReadOnlyList<Choice> Colours =
-    [
-        new(nameof(LaneColour.Fill), "Fill", "Stored pallets. Amber means it expires within 3 days."),
-        new(nameof(LaneColour.Velocity), "Velocity", "How often a product moves: A fast, B medium, C slow."),
-        new(nameof(LaneColour.Expiry), "Expiry", "Days left before the best-before date."),
-    ];
+<ConfirmDialog Request="_confirm" OnClose="() => _confirm = null" />
 
+@code {
+    private const string GoalsTab = "goals";
+    private static readonly TimeSpan OrdersEvery = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan BannerFor = TimeSpan.FromSeconds(6);
+    private readonly HashSet<string> _dismissed = [];
     private LaneColour _colour = LaneColour.Fill;
     private string? _product;
-    private (int Level, int Bay)? _lane;
-    private string? _taxi;
-    private LaneDetail? _detail;
+    private Selection? _selected;
+    private LaneDetail? _lane;
     private IReadOnlyList<SkuView> _skus = [];
     private Dictionary<string, Velocity> _velocities = [];
+    private IReadOnlyList<OrderView> _orders = [];
+    private DateTime _ordersLoaded;
+    private string _tab = "jobs";
+    private bool _flat;
+    private bool _labels = true;
+    private bool _immersive;
+    private string? _accepting;
+    private Confirmation? _confirm;
+    private WorldView? _world;
+    private long _seen;
+    private ScoreEvent? _banner;
+    private DateTime _bannerUntil;
 
-    protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(1);
+    protected override TimeSpan RefreshEvery => TimeSpan.FromMilliseconds(500);
 
-    private TaxiView? SelectedTaxiView => _taxi is null ? null : Live?.Taxis.FirstOrDefault(taxi => taxi.Id == _taxi);
+    private IReadOnlyList<SuggestionView> Offers =>
+        Live?.Suggestions.Where(offer => !_dismissed.Contains(offer.Id)).ToList() ?? [];
 
-    private SkuView? FoundSku => _product is null ? null : _skus.FirstOrDefault(sku => sku.Code == _product);
+    private (int Level, int Bay)? SelectedLane => _selected?.TryLane(out var lane) == true ? (lane.Level, lane.Bay) : null;
 
-    protected override async Task OnInitializedAsync() => await LoadSkusAsync();
+    private string? SelectedTaxi => _selected is { Kind: SelectionKind.Taxi } taxi ? taxi.Id : null;
+
+    private string? Highlight => _selected switch
+    {
+        { Kind: SelectionKind.Alarm } alarm => Live?.ActiveAlarms.FirstOrDefault(a => a.Id == alarm.Id) is { } active ? WorldView.SpotOf(active) : null,
+        { Kind: SelectionKind.Order } => null,
+        { Kind: SelectionKind.Reject } => "Reject",
+        { } other => other.Id,
+        null => null,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSkusAsync();
+        await LoadOrdersAsync();
+    }
 
     protected override async Task OnLiveAsync()
     {
-        if (_lane is { } lane && _detail is { } detail && Feed.LaneAt(lane.Level, lane.Bay) is { } latest && latest.Version != detail.Lane.Version)
-            _detail = await Api.LaneAsync(lane.Level, lane.Bay) ?? _detail;
+        if (DateTime.UtcNow - _ordersLoaded > OrdersEvery) await LoadOrdersAsync();
         if (_skus.Count == 0) await LoadSkusAsync();
+        if (_selected?.TryLane(out var id) == true && _lane is { } shown && Feed.LaneAt(id.Level, id.Bay) is { } latest && latest.Version != shown.Lane.Version)
+            _lane = await Api.LaneAsync(id.Level, id.Bay) ?? _lane;
+        WatchScore();
     }
 
     private async Task LoadSkusAsync()
@@ -149,61 +127,79 @@
         _velocities = _skus.ToDictionary(sku => sku.Code, sku => sku.Velocity);
     }
 
-    private void SetColour(string value) => _colour = Enum.Parse<LaneColour>(value);
-
-    private async Task SelectProduct(ChangeEventArgs e)
+    private async Task LoadOrdersAsync()
     {
-        var code = e.Value?.ToString();
-        _product = string.IsNullOrEmpty(code) ? null : code;
-        if (_product is not null) _skus = await Api.SkusAsync();
+        _orders = await Api.OrdersAsync("open");
+        _ordersLoaded = DateTime.UtcNow;
     }
 
-    private async Task SelectLaneAsync(LaneView lane)
+    private async Task SelectAsync(Selection? selection)
     {
-        _taxi = null;
-        _lane = (lane.Level, lane.Bay);
-        _detail = await Api.LaneAsync(lane.Level, lane.Bay);
-    }
-
-    private void SelectTaxi(string id)
-    {
+        _selected = selection;
         _lane = null;
-        _detail = null;
-        _taxi = id;
+        if (selection?.TryLane(out var lane) == true) _lane = await Api.LaneAsync(lane.Level, lane.Bay);
     }
 
-    private void ClearSelection()
+    private async Task SelectOrderAsync(OrderView order)
     {
-        _lane = null;
-        _detail = null;
-        _taxi = null;
+        if (_selected is { Kind: SelectionKind.Order } current && current.Id == order.Id)
+        {
+            await SelectAsync(null);
+            return;
+        }
+        _product = order.SkuCode;
+        await SelectAsync(new Selection(SelectionKind.Order, order.Id));
     }
 
-    private IEnumerable<(string Swatch, string Text)> Legend() => _colour switch
+    private async Task SelectAlarmAsync(AlarmView alarm)
     {
-        LaneColour.Velocity =>
-        [
-            ("pip tone-v-a", "A · fast mover"),
-            ("pip tone-v-b", "B · medium"),
-            ("pip tone-v-c", "C · slow mover"),
-            ("lane-busy", "Taxi on its way"),
-            ("taxi-chip", "Taxi, with its number"),
-        ],
-        LaneColour.Expiry =>
-        [
-            ("pip tone-fresh", "More than a week"),
-            ("pip tone-week", "Within 7 days"),
-            ("pip tone-soon", "Within 3 days"),
-            ("pip tone-expired", "Past best before"),
-            ("lane-busy", "Taxi on its way"),
-        ],
-        _ =>
-        [
-            ("pip tone-fill", "One pallet"),
-            ("pip tone-soon", "Expires within 3 days"),
-            ("pip", "Free place"),
-            ("lane-busy", "Taxi on its way"),
-            ("taxi-chip", "Taxi, with its number"),
-        ],
-    };
+        await SelectAsync(new Selection(SelectionKind.Alarm, alarm.Id));
+        if (_world is not null) await _world.FocusAsync(WorldView.SpotOf(alarm));
+    }
+
+    private async Task FocusFirstAlarmAsync()
+    {
+        if (Live?.ActiveAlarms.FirstOrDefault() is { } alarm) await SelectAlarmAsync(alarm);
+    }
+
+    private async Task AcceptAsync(SuggestionView offer)
+    {
+        _accepting = offer.Id;
+        try
+        {
+            var result = await Commands.AcceptAsync(offer);
+            if (!result.Ok) return;
+            _dismissed.Add(offer.Id);
+            await LoadOrdersAsync();
+            if ((result.Ref ?? offer.OrderId) is { } orderId) await SelectAsync(new Selection(SelectionKind.Order, orderId));
+        }
+        finally
+        {
+            _accepting = null;
+        }
+    }
+
+    private async Task CommandAsync(string name)
+    {
+        if (_world is not null) await _world.CommandAsync(name);
+    }
+
+    private void UseFlat() => _flat = true;
+
+    private void WatchScore()
+    {
+        if (_banner is not null && DateTime.UtcNow > _bannerUntil) _banner = null;
+        if (Live?.Shift.Events is not { Count: > 0 } events) return;
+        var newest = events[0].Seq;
+        if (_seen == 0)
+        {
+            _seen = newest;
+            return;
+        }
+        var big = events.Where(item => item.Seq > _seen && item.Kind is ScoreKind.Goal or ScoreKind.Level).MaxBy(item => item.Seq);
+        _seen = Math.Max(_seen, newest);
+        if (big is null) return;
+        _banner = big;
+        _bannerUntil = DateTime.UtcNow + BannerFor;
+    }
 }

@@ -1,0 +1,76 @@
+@inject OperatorCommands Commands
+
+@{
+    var look = Display.Look(Taxi.State);
+    var inbound = Taxi.JobKind == JobKind.Putaway;
+}
+<article class="machine-card tone-@look.Tone @(Selected ? "is-selected" : null)">
+    <header class="machine-card-head">
+        <span class="machine-card-icon"><Icon Name="taxi" Size="18" /></span>
+        <div class="machine-card-title">
+            <strong>@Taxi.Id</strong>
+            <span>@Display.Where(Taxi)</span>
+        </div>
+        <StateBadge Look="look" Side="bottom" />
+    </header>
+
+    <p class="machine-card-activity">
+        @if (Taxi.JobKind is not null)
+        {
+            <span class="flow-chip is-@(inbound ? "in" : "out")">
+                <Icon Name="@(inbound ? "arrow-down" : "arrow-up")" Size="13" Stroke="2.2" />@(inbound ? "Into store" : "Out of store")
+            </span>
+        }
+        <span>@Taxi.Activity</span>
+    </p>
+
+    <div class="machine-card-body">
+        <Gauge Value="Taxi.Battery" Label="battery" Charging="Taxi.State == TaxiState.Charging" />
+        <LevelMeter Levels="Levels" Position="Taxi.Level" Moving="Taxi.State == TaxiState.OnLift" Label="@Display.Where(Taxi)" />
+        <div class="machine-card-route">
+            <span>Route</span>
+            <strong>@(Taxi.JobKind is null ? "No job" : $"{Taxi.From} → {Taxi.To}")</strong>
+            <small>@(Taxi.JobId is null ? "Waiting for work" : $"{Taxi.JobId} · {Taxi.PalletId ?? "no pallet yet"}")</small>
+        </div>
+    </div>
+
+    <dl class="machine-card-facts">
+        <div><dt>Speed</dt><dd>@Display.Num(Taxi.SpeedMs, "0.0") m/s</dd></div>
+        <div><dt>Motor</dt><dd>@Display.Num(Taxi.MotorTempC, "0") °C</dd></div>
+        <div><dt>Wi-Fi</dt><dd><SignalBars Bars="Taxi.Signal" /></dd></div>
+    </dl>
+
+    <footer class="machine-card-foot">
+        @if (Taxi.FaultCode is not null)
+        {
+            <button type="button" class="btn btn-danger btn-sm" @onclick="() => ConfirmAsync(TaxiCommand.Reset)"><Icon Name="reset" Size="15" />Reset</button>
+        }
+        else
+        {
+            <Tip Text="@OperatorCommands.ChargeHelp(Taxi)">
+                <button type="button" class="btn btn-sm" disabled="@(!Taxi.InService || Taxi.ChargeHold)" @onclick="() => ConfirmAsync(TaxiCommand.Charge)"><Icon Name="bolt" Size="15" />Charge</button>
+            </Tip>
+            @if (Taxi.InService)
+            {
+                <Tip Text="@OperatorCommands.ParkHelp(Taxi)">
+                    <button type="button" class="btn btn-sm" disabled="@(Taxi.JobId is not null)" @onclick="() => ConfirmAsync(TaxiCommand.Park)"><Icon Name="pause" Size="15" />Park</button>
+                </Tip>
+            }
+            else
+            {
+                <button type="button" class="btn btn-primary btn-sm" @onclick="() => ConfirmAsync(TaxiCommand.Resume)"><Icon Name="play" Size="15" />Resume</button>
+            }
+        }
+        <button type="button" class="btn btn-ghost btn-sm machine-card-more" @onclick="() => OnOpen.InvokeAsync(Taxi.Id)">Details<Icon Name="chevron-right" Size="14" /></button>
+    </footer>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public TaxiView Taxi { get; set; } = default!;
+    [Parameter] public int Levels { get; set; } = 6;
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public EventCallback<string> OnOpen { get; set; }
+    [Parameter] public EventCallback<Confirmation> OnConfirm { get; set; }
+
+    private Task ConfirmAsync(TaxiCommand command) => OnConfirm.InvokeAsync(Commands.Taxi(Taxi, command));
+}

@@ -34,6 +34,19 @@ It is split by concern into `Warehouse.Fleet`, `.Flow`, `.Orders`, `.Faults` and
 Operator commands (`CreateOrder`, `SendToCharge`, `ResetTaxi`, `Reinduct`…) return a `CommandResult`
 with a sentence the screen shows as it is. Read models in `Contracts` are immutable records built by `ViewBuilder`.
 
+### The shift as a game
+
+`ShiftScore` watches the store and never changes it. The model tells it when a pallet is stored or dispatched
+and when an order completes; `AlarmBoard.Closed` tells it who closed an alarm (the operator, remote support or the supervisor).
+It keeps the points, the level, a star rating from the last 20 completed orders, five goals with tiers and the latest score events.
+Orders that were already late when the shift started (open orders reloaded after a restart) are not rated.
+Each event names its spot (a lane such as `L2·B05`, `Dock 2`, a machine id or `Infeed`), so the 3D view can show the points where they were earned.
+
+`Advisor` turns the current state into up to three suggestions: rush an outbound order due within 10 minutes,
+receive stock for a short order, ship stock that is best before within 3 days, restock a fast or steady mover with 2 or fewer free pallets.
+A suggestion carries the `NewOrder` (or the order to make urgent), so accepting it is an ordinary command.
+Both reach the screens in the live snapshot as `Shift` and `Suggestions`.
+
 ### Jobs and routes
 
 - Waiting jobs are served by priority, then age. Each goes to the able Taxi with the lowest estimated time to the pickup:
@@ -88,7 +101,24 @@ Commands answer `200` with the result sentence, or `409` with the reason they we
 - `LiveComponent` is the base for live screens. It redraws at most once per `RefreshEvery`
   (rack: every snapshot, Fleet: 0.5 s, Overview: 1 s, Orders: 2 s, Inventory: 4 s) and can reload extra data first.
 - `WcsApi` is a typed `HttpClient` for lists and commands. Command results become toasts.
-- The rack view draws the static frame once in SVG and places lanes, Taxis, carriages and pallets as HTML markers
+- The live view is a 3D scene in `wwwroot/js/world.js`, an ES module on three.js r170 loaded from jsDelivr, with its parts in
+  `js/world/`: `site.js` (sizes, colours, themes), `scene.js` (the building, rack, conveyors and docks), `camera.js`
+  (the camera rig and mouse, touch and keyboard controls, kept inside fixed zoom and position limits) and `flow.js`
+  (the moving arrows that show where each Taxi is heading, green into store and blue out of store).
+  `WorldView` imports it once, sends the fixed site shape, then pushes a `WorldFrame` on every snapshot: Taxis with their
+  job's from and to places, VTUs, conveyors, the lanes that changed, alarm markers and new score events. Texts and tones are
+  worked out in C#, so the module only places things. Machines glide between frames over the measured snapshot interval;
+  a Taxi visibly reaches into the lane while it picks up or sets down. Clicks come back through `[JSInvokable] Pick`.
+  Without WebGL, or if the module cannot load, the page falls back to the 2D rack view.
+- The HUD around the scene is ordinary Blazor: `HudTop` (score, clock, rating), `HudBoard` (jobs, offers, goals),
+  `HudRail` (resources and view tools), `HudAlerts` and `Inspector`. Machine and alarm commands come from `OperatorCommands`,
+  which the Fleet, Orders and Alarms pages share, so a command asks the same question wherever it starts.
+- Overview and Fleet are built from shared parts: `TaxiCard`, `LiftCard` and `BeltCard` in `Components/Machines`,
+  `Gauge`, `LevelMeter`, `Sparkline` and `StatTile` in `Components/Ui`, and `OfferCard` and `GoalRow`, which the live view's
+  board uses too.
+- Every tooltip is drawn by one layer above the page (`tip` in `app.js`), so panels, scroll areas and the 3D view never cut it off.
+  Hover texts in the 3D view use the same layer.
+- The 2D rack view draws the static frame once in SVG and places lanes, Taxis, carriages and pallets as HTML markers
   in percent. Markers glide between snapshots with 0.26 s linear transitions. `LaneCell` only redraws when its lane
   version, colour or selection changes.
 - Usability: help for every page (`?`), global search (`⌘K`), a confirmation for every command that says what will happen,

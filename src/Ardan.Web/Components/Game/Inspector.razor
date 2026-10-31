@@ -1,0 +1,265 @@
+@inject OperatorCommands Commands
+
+<aside class="hud-panel hud-inspector" aria-label="@($"{Kicker} {Title}")">
+    <header class="inspector-head">
+        <div>
+            <span class="drawer-kicker">@Kicker</span>
+            <h2>@Title</h2>
+        </div>
+        <button type="button" class="icon-btn" @onclick="OnClose" aria-label="Close panel"><Icon Name="x" /></button>
+    </header>
+
+    <div class="inspector-body">
+        @switch (Selected.Kind)
+        {
+            case SelectionKind.Taxi when Taxi is { } taxi:
+                <StateBadge Look="Display.Look(taxi.State)" Side="bottom" />
+                <p class="selection-activity">@taxi.Activity</p>
+                if (taxi.FaultCode is not null)
+                {
+                    <p class="note tone-crit"><Icon Name="warning" Size="16" />Stopped by a safety sensor. Check the aisle on level @taxi.Level is clear, then reset it.</p>
+                }
+                <dl class="facts">
+                    <Fact Label="Battery"><BatteryMeter Value="taxi.Battery" Charging="taxi.State == TaxiState.Charging" /></Fact>
+                    <Fact Label="Where">@Display.Where(taxi)</Fact>
+                    <Fact Label="Carrying">@(taxi.PalletId is null ? "Nothing" : $"{taxi.PalletId} · {taxi.SkuName}")</Fact>
+                    <Fact Label="Job">@(taxi.JobId is null ? "None" : $"{taxi.JobId} · {(taxi.JobKind == JobKind.Putaway ? "putaway" : "retrieval")}")</Fact>
+                </dl>
+                <div class="inspector-actions">
+                    @if (taxi.FaultCode is not null)
+                    {
+                        <button type="button" class="btn btn-danger" @onclick="() => ConfirmAsync(Commands.Taxi(taxi, TaxiCommand.Reset))"><Icon Name="reset" Size="16" />Reset @taxi.Id</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn" disabled="@(!taxi.InService || taxi.ChargeHold)" @onclick="() => ConfirmAsync(Commands.Taxi(taxi, TaxiCommand.Charge))"><Icon Name="bolt" Size="16" />Charge</button>
+                        if (taxi.InService)
+                        {
+                            <button type="button" class="btn" disabled="@(taxi.JobId is not null)" @onclick="() => ConfirmAsync(Commands.Taxi(taxi, TaxiCommand.Park))"><Icon Name="pause" Size="16" />Park</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-primary" @onclick="() => ConfirmAsync(Commands.Taxi(taxi, TaxiCommand.Resume))"><Icon Name="play" Size="16" />Return to service</button>
+                        }
+                    }
+                    <a class="btn btn-ghost" href="@($"fleet?select={taxi.Id}")">Fleet</a>
+                </div>
+                break;
+
+            case SelectionKind.Lift when Lift is { } lift:
+                <StateBadge Look="Display.Look(lift.State)" Side="bottom" />
+                <p class="selection-activity">@lift.Activity</p>
+                <dl class="facts">
+                    <Fact Label="Position">Level @Display.Num(lift.Position, "0.0")</Fact>
+                    <Fact Label="On board">@(lift.TaxiId is null ? "No Taxi" : $"{lift.TaxiId}{(lift.Loaded ? ", with a pallet" : ", empty")}")</Fact>
+                    <Fact Label="Queue" Help="Taxis waiting at the dock for this VTU.">@lift.Waiting</Fact>
+                </dl>
+                <div class="inspector-actions">
+                    @if (lift.FaultCode is not null)
+                    {
+                        <button type="button" class="btn btn-danger" @onclick="() => ConfirmAsync(Commands.ResetLift(lift))"><Icon Name="reset" Size="16" />Reset @lift.Id</button>
+                    }
+                    <a class="btn btn-ghost" href="@($"fleet?select={lift.Id}")">Fleet</a>
+                </div>
+                break;
+
+            case SelectionKind.Belt when Belt is { } belt:
+                var jammed = belt.State == ConveyorState.Jammed;
+                <Badge Text="@(jammed ? "Jammed" : "Running")" Tone="@(jammed ? "crit" : "ok")" />
+                <p class="selection-activity">@Display.Help(belt)</p>
+                if (jammed)
+                {
+                    <div class="inspector-actions">
+                        <button type="button" class="btn btn-danger" @onclick="() => ConfirmAsync(Commands.ResetConveyor(belt))"><Icon Name="reset" Size="16" />Reset</button>
+                    </div>
+                }
+                break;
+
+            case SelectionKind.Lane when Lane is { } detail:
+                var lane = detail.Lane;
+                if (lane.SkuName is null)
+                {
+                    <p class="muted">Empty. The next batch that needs a lane at this level and distance can go here.</p>
+                }
+                else
+                {
+                    <p class="selection-activity"><strong>@lane.SkuName</strong> · batch @lane.Batch</p>
+                    <div class="lane-meter">
+                        <ProgressBar Value="lane.Count" Max="lane.Depth" />
+                        <span>@lane.Count of @lane.Depth places</span>
+                    </div>
+                    <ol class="lane-pallets">
+                        @foreach (var pallet in detail.Pallets)
+                        {
+                            <li @key="pallet.Id">
+                                <a href="@($"inventory?pallet={pallet.Id}")">@pallet.Id</a>
+                                <span class="muted">@pallet.WeightKg kg</span>
+                                <span class="badge tone-@Display.ExpiryTone(pallet.Expiry, Now)">@Display.Expiry(pallet.Expiry, Now)</span>
+                            </li>
+                        }
+                    </ol>
+                    <p class="hint">The top pallet leaves first. A lane holds one batch, so its pallets share a best-before date.</p>
+                    <div class="inspector-actions">
+                        <button type="button" class="btn" @onclick="() => OnFind.InvokeAsync(lane.SkuCode)"><Icon Name="search" Size="16" />Find all</button>
+                        <a class="btn btn-ghost" href="@($"orders?new={lane.SkuCode}")">Send to a dock</a>
+                    </div>
+                }
+                if (lane.Busy)
+                {
+                    <p class="note tone-info"><Icon Name="taxi" Size="15" />A Taxi is on its way to this lane.</p>
+                }
+                break;
+
+            case SelectionKind.Alarm when Alarm is { } alarm:
+                <div class="drawer-state">
+                    <StateBadge Look="Display.Look(alarm.Severity)" Side="bottom" />
+                    @if (alarm.State == AlarmState.Acknowledged)
+                    {
+                        <Badge Text="Acknowledged" Tone="neutral" />
+                    }
+                </div>
+                <p class="selection-activity">@alarm.What</p>
+                <ol class="steps">
+                    @foreach (var step in alarm.Steps)
+                    {
+                        <li>@step</li>
+                    }
+                </ol>
+                <div class="inspector-actions">
+                    @if (alarm.Action != AlarmAction.None && alarm.ActionLabel is not null)
+                    {
+                        <button type="button" class="btn @(alarm.Action == AlarmAction.Reinduct ? "btn-primary" : "btn-danger")" @onclick="() => ConfirmAsync(Commands.AlarmFix(alarm))">
+                            <Icon Name="@(alarm.Action == AlarmAction.Reinduct ? "reset" : "wrench")" Size="16" />@alarm.ActionLabel
+                        </button>
+                    }
+                    @if (alarm.State == AlarmState.Active)
+                    {
+                        <button type="button" class="btn" @onclick="() => Commands.AcknowledgeAsync(alarm)"><Icon Name="check" Size="16" />Acknowledge</button>
+                    }
+                    <a class="btn btn-ghost" href="alarms">Alarms</a>
+                </div>
+                break;
+
+            case SelectionKind.Reject:
+                var rejects = Live.ActiveAlarms.Where(alarm => WorldView.SpotOf(alarm) == "Reject").ToList();
+                if (rejects.Count == 0)
+                {
+                    <p class="muted">Empty. Pallets that fail the profile check at the infeed wait here for a fix.</p>
+                }
+                else
+                {
+                    <ul class="reject-list">
+                        @foreach (var reject in rejects)
+                        {
+                            <li @key="reject.Id">
+                                <span><strong>@reject.Title</strong><span class="muted">@reject.What</span></span>
+                                <button type="button" class="btn btn-primary btn-sm" @onclick="() => ConfirmAsync(Commands.AlarmFix(reject))"><Icon Name="reset" Size="14" />Re-induct</button>
+                            </li>
+                        }
+                    </ul>
+                }
+                break;
+
+            case SelectionKind.Order when Order is { } order:
+                var open = order.Status is OrderStatus.Queued or OrderStatus.InProgress or OrderStatus.Short or OrderStatus.Exception;
+                <div class="drawer-state">
+                    <StateBadge Look="Display.Look(order.Status)" Side="bottom" />
+                    <StateBadge Look="Display.Look(order.Priority)" Side="bottom" />
+                </div>
+                if (order.Note is not null)
+                {
+                    <p class="note tone-@(order.Status == OrderStatus.Exception ? "warn" : "info")"><Icon Name="info" Size="16" />@order.Note</p>
+                }
+                <div class="big-progress">
+                    <ProgressBar Value="order.Done" Pending="order.InFlight" Max="order.Quantity" Tone="@(order.Status == OrderStatus.Completed ? "ok" : "brand")" />
+                    <span><strong>@order.Done of @order.Quantity</strong> @(order.Type == OrderType.Outbound ? "at the dock" : "stored")@(order.InFlight > 0 ? $" · {order.InFlight} on the move" : null)</span>
+                </div>
+                <dl class="facts">
+                    <Fact Label="Product">@order.SkuName</Fact>
+                    <Fact Label="@(order.Type == OrderType.Outbound ? "Dock" : "Arrives on")">@(order.Type == OrderType.Outbound ? $"Dock {order.Dock}" : "Infeed")</Fact>
+                    <Fact Label="Due">@Display.Time(order.DueAt)@(open ? $" · {Display.Due(order.DueAt, Now)}" : null)</Fact>
+                </dl>
+                if (open)
+                {
+                    <Segmented Choices="Priorities" Value="@order.Priority.ToString()" ValueChanged="value => SetPriorityAsync(order, value)" Label="Priority" />
+                }
+                <div class="inspector-actions">
+                    @if (open)
+                    {
+                        <button type="button" class="btn btn-danger" @onclick="() => ConfirmAsync(Commands.CancelOrder(order, () => OnChanged.InvokeAsync()))"><Icon Name="x" Size="16" />Cancel</button>
+                    }
+                    <a class="btn btn-ghost" href="@($"orders?select={order.Id}")">Orders</a>
+                </div>
+                break;
+
+            default:
+                <p class="muted">@Gone</p>
+                break;
+        }
+    </div>
+</aside>
+
+@code {
+    private static readonly IReadOnlyList<Choice> Priorities =
+    [
+        new(nameof(Priority.Normal), "Normal", "Served in due-time order."),
+        new(nameof(Priority.High), "High", "Served before normal orders."),
+        new(nameof(Priority.Urgent), "Urgent", "Served before everything else."),
+    ];
+
+    [Parameter, EditorRequired] public Selection Selected { get; set; } = default!;
+    [Parameter, EditorRequired] public LiveSnapshot Live { get; set; } = default!;
+    [Parameter] public LaneDetail? Lane { get; set; }
+    [Parameter] public IReadOnlyList<OrderView> Orders { get; set; } = [];
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Confirmation> OnConfirm { get; set; }
+    [Parameter] public EventCallback<string?> OnFind { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private DateTimeOffset Now => Live.Time;
+
+    private TaxiView? Taxi => Live.Taxis.FirstOrDefault(taxi => taxi.Id == Selected.Id);
+
+    private LiftView? Lift => Live.Lifts.FirstOrDefault(lift => lift.Id == Selected.Id);
+
+    private ConveyorView? Belt => Live.Conveyors.FirstOrDefault(belt => belt.Id == Selected.Id);
+
+    private AlarmView? Alarm => Live.ActiveAlarms.FirstOrDefault(alarm => alarm.Id == Selected.Id);
+
+    private OrderView? Order => Orders.FirstOrDefault(order => order.Id == Selected.Id);
+
+    private string Kicker => Selected.Kind switch
+    {
+        SelectionKind.Taxi => "Taxi",
+        SelectionKind.Lift => "VTU",
+        SelectionKind.Belt => "Conveyor",
+        SelectionKind.Lane => "Lane",
+        SelectionKind.Alarm => Alarm is { } alarm ? $"Alarm · {alarm.Source}" : "Alarm",
+        SelectionKind.Reject => "Infeed",
+        _ => Order?.Type == OrderType.Inbound ? "Inbound order" : "Outbound order",
+    };
+
+    private string Title => Selected.Kind switch
+    {
+        SelectionKind.Belt => Belt?.Name ?? Selected.Id,
+        SelectionKind.Alarm => Alarm?.Title ?? "Closed",
+        SelectionKind.Reject => "Reject lane",
+        _ => Selected.Id,
+    };
+
+    private string Gone => Selected.Kind switch
+    {
+        SelectionKind.Alarm => "This alarm is closed. Nothing more to do.",
+        SelectionKind.Order => "This order is no longer open.",
+        SelectionKind.Lane => "Loading the lane…",
+        _ => "Not reported by the control server right now.",
+    };
+
+    private Task ConfirmAsync(Confirmation confirmation) => OnConfirm.InvokeAsync(confirmation);
+
+    private async Task SetPriorityAsync(OrderView order, string value)
+    {
+        await Commands.SetPriorityAsync(order.Id, Enum.Parse<Priority>(value));
+        await OnChanged.InvokeAsync();
+    }
+}

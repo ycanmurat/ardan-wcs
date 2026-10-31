@@ -1,0 +1,19 @@
+<span class="stars" role="img" aria-label="@($"{Display.Num(Value, "0.#")} of 5 stars")">
+    @for (var star = 0; star < 5; star++)
+    {
+        var fill = Math.Clamp(Value - star, 0, 1);
+        <svg class="star" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path class="star-empty" d="@Shape" />
+            @if (fill > 0)
+            {
+                <path class="star-full" d="@Shape" style="@(fill < 1 ? "clip-path: inset(0 50% 0 0)" : null)" />
+            }
+        </svg>
+    }
+</span>
+
+@code {
+    private const string Shape = "M12 2.8l2.75 5.6 6.15.9-4.45 4.35 1.05 6.1L12 16.9l-5.5 2.85 1.05-6.1L3.1 9.3l6.15-.9z";
+
+    [Parameter] public double Value { get; set; }
+}

@@ -1,0 +1,45 @@
+@inject OperatorCommands Commands
+
+@{
+    var jammed = Belt.State == ConveyorState.Jammed;
+    var inbound = Belt.Id == Display.InfeedId;
+}
+<article class="machine-card tone-@(jammed ? "crit" : "ok")">
+    <header class="machine-card-head">
+        <span class="machine-card-icon"><Icon Name="conveyor" Size="18" /></span>
+        <div class="machine-card-title">
+            <strong>@Belt.Name</strong>
+            <span>@Belt.Id · @Display.Num(Belt.Length, "0") m · @(inbound ? "into store" : "to the docks")</span>
+        </div>
+        <Badge Text="@(jammed ? "Jammed" : "Running")" Tone="@(jammed ? "crit" : "ok")" />
+    </header>
+
+    <p class="machine-card-activity"><span>@Display.Help(Belt)</span></p>
+
+    <div class="belt-track">
+        <div class="belt-strip @(jammed ? "is-jammed" : null)" aria-hidden="true">
+            @foreach (var item in Belt.Items)
+            {
+                <i style="left: @Display.Num(Math.Clamp(item.Position / Belt.Length, 0, 1) * 92, "0.#")%" @key="item.PalletId"></i>
+            }
+        </div>
+        <span class="belt-ends">
+            <span>@(inbound ? "Goods-in" : "Rack")</span>
+            <Icon Name="arrow-right" Size="13" />
+            <span>@(inbound ? "Rack" : "Docks 1 to 3")</span>
+        </span>
+    </div>
+
+    <footer class="machine-card-foot">
+        <span class="muted">@(Belt.Items.Count == 0 ? "Empty" : Display.Pallets(Belt.Items.Count) + " on the belt")</span>
+        @if (jammed)
+        {
+            <button type="button" class="btn btn-danger btn-sm" @onclick="() => OnConfirm.InvokeAsync(Commands.ResetConveyor(Belt))"><Icon Name="reset" Size="15" />Reset</button>
+        }
+    </footer>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public ConveyorView Belt { get; set; } = default!;
+    [Parameter] public EventCallback<Confirmation> OnConfirm { get; set; }
+}

@@ -13,6 +13,8 @@ public sealed class AlarmBoard(IJournal journal, int lastNumber = 0)
     public IReadOnlyList<Alarm> Active => _active;
     public IEnumerable<Alarm> Cleared => _cleared;
 
+    public event Action<Alarm>? Closed;
+
     public Alarm? Raise(
         string code,
         string source,
@@ -52,6 +54,7 @@ public sealed class AlarmBoard(IJournal journal, int lastNumber = 0)
         _cleared.AddFirst(alarm);
         if (_cleared.Count > HistorySize) _cleared.RemoveLast();
         journal.AlarmChanged(alarm);
+        Closed?.Invoke(alarm);
     }
 
     public void Clear(string code, string source, DateTimeOffset now, string clearedBy, string? subject = null)

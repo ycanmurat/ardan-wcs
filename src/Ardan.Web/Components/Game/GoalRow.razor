@@ -1,0 +1,19 @@
+<li class="goal">
+    <Tip Text="@($"Tier {Goal.Tier}. Each time a goal is reached it comes back harder.")" Side="bottom">
+        <span class="goal-tier">@Display.Roman(Goal.Tier)</span>
+    </Tip>
+    <span class="goal-body">
+        <strong>@Goal.Title</strong>
+        <ProgressBar Value="(int)Goal.Progress" Max="(int)Goal.Target" Tone="gold" />
+        <span class="goal-meta">@Meta</span>
+    </span>
+    <span class="goal-reward">+@Goal.Reward</span>
+</li>
+
+@code {
+    [Parameter, EditorRequired] public GoalView Goal { get; set; } = default!;
+
+    private string Meta => Goal.Kind == GoalKind.Uptime
+        ? $"{Display.Num(Goal.Progress / 60, "0.0")} of {Display.Num(Goal.Target / 60, "0")} min"
+        : $"{Display.Num(Goal.Progress, "0")} of {Display.Num(Goal.Target, "0")}";
+}

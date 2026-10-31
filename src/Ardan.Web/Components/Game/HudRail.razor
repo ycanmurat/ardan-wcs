@@ -1,0 +1,182 @@
+<aside class="hud-rail" aria-label="Store and view">
+    <section class="hud-panel hud-stock" aria-label="Store">
+        @foreach (var item in Resources)
+        {
+            <Tip Title="@item.Title" Text="@item.Help" Side="left">
+                <span class="hud-res tone-@item.Tone">
+                    <Icon Name="@item.Icon" Size="16" />
+                    <span class="hud-res-value"><strong>@item.Value</strong><small>@item.Of</small></span>
+                    <i class="hud-res-bar" style="--share: @Display.Num(item.Share * 100, "0.#")%"></i>
+                </span>
+            </Tip>
+        }
+    </section>
+
+    <section class="hud-panel hud-tools" aria-label="View">
+        <Tip Text="Colour lanes and find a product" Side="left">
+            <button type="button" class="hud-tool @(_lens ? "is-active" : null)" aria-pressed="@(_lens ? "true" : "false")" aria-label="Colour lanes and find a product"
+                    @onclick="() => _lens = !_lens"><Icon Name="layers" /></button>
+        </Tip>
+        @if (!Flat)
+        {
+            @foreach (var tool in CameraTools)
+            {
+                <Tip Text="@tool.Hint" Side="left" Class="@(tool.Command.StartsWith("zoom", StringComparison.Ordinal) ? "is-zoom" : null)">
+                    <button type="button" class="hud-tool" aria-label="@tool.Hint" @onclick="() => OnCommand.InvokeAsync(tool.Command)"><Icon Name="@tool.Icon" /></button>
+                </Tip>
+            }
+            <Tip Text="@(Labels ? "Hide machine labels" : "Show machine labels")" Side="left">
+                <button type="button" class="hud-tool @(Labels ? "is-active" : null)" aria-pressed="@(Labels ? "true" : "false")" aria-label="Machine labels"
+                        @onclick="() => LabelsChanged.InvokeAsync(!Labels)"><Icon Name="tag" /></button>
+            </Tip>
+        }
+        <Tip Text="@(Flat ? "Back to the 3D view" : "Flat drawing of the rack, as seen from the dock")" Side="left">
+            <button type="button" class="hud-tool" aria-label="@(Flat ? "Show the 3D view" : "Show the flat rack drawing")"
+                    @onclick="() => FlatChanged.InvokeAsync(!Flat)"><span class="hud-tool-text">@(Flat ? "3D" : "2D")</span></button>
+        </Tip>
+        @if (!Flat)
+        {
+            <Tip Text="@(Immersive ? "Leave focus mode · F" : "Focus mode: full screen, no sidebar · F")" Side="left">
+                <button type="button" class="hud-tool" aria-label="Focus mode" @onclick='() => OnCommand.InvokeAsync("fullscreen")'>
+                    <Icon Name="@(Immersive ? "compress" : "expand")" />
+                </button>
+            </Tip>
+        }
+    </section>
+
+    @if (_lens)
+    {
+        <section class="hud-panel hud-lens" aria-label="Colour and find">
+            <span class="hud-label">Colour lanes by</span>
+            <Segmented Choices="Colours" Value="@Colour.ToString()" ValueChanged="SetColourAsync" Label="Colour lanes by" />
+            <label class="hud-label" for="hud-product">Find a product</label>
+            <select id="hud-product" class="input" value="@(Product ?? "")" @onchange="SetProductAsync">
+                <option value="">All products</option>
+                @foreach (var sku in Skus)
+                {
+                    <option value="@sku.Code">@sku.Name</option>
+                }
+            </select>
+            @if (Found is { } found)
+            {
+                <p class="find-result">
+                    <strong>@Display.Pallets(found.Pallets)</strong> in @found.Lanes @(found.Lanes == 1 ? "lane" : "lanes")
+                    @if (found.NextExpiry is { } next)
+                    {
+                        <span>· oldest best before @Display.Day(next)</span>
+                    }
+                </p>
+            }
+            <ul class="rack-legend">
+                @foreach (var (swatch, text) in Legend)
+                {
+                    <li><i class="swatch @swatch"></i>@text</li>
+                }
+            </ul>
+        </section>
+    }
+</aside>
+
+@code {
+    private static readonly IReadOnlyList<Choice> Colours =
+    [
+        new(nameof(LaneColour.Fill), "Fill", "Stored pallets. Amber means it expires within 3 days."),
+        new(nameof(LaneColour.Velocity), "Velocity", "How often a product moves: A fast, B medium, C slow."),
+        new(nameof(LaneColour.Expiry), "Expiry", "Days left before the best-before date."),
+    ];
+
+    private static readonly IReadOnlyList<(string Command, string Icon, string Hint)> CameraTools =
+    [
+        ("rotate-left", "rotate-left", "Turn left · Q"),
+        ("rotate-right", "rotate-right", "Turn right · E"),
+        ("zoom-in", "plus", "Zoom in · +"),
+        ("zoom-out", "minus", "Zoom out · −"),
+        ("home", "home", "Back to the whole store · 0"),
+    ];
+
+    private bool _lens;
+
+    private sealed record Resource(string Title, string Help, string Icon, string Value, string Of, double Share, string Tone);
+
+    [Parameter, EditorRequired] public LiveSnapshot Live { get; set; } = default!;
+    [Parameter] public bool Flat { get; set; }
+    [Parameter] public EventCallback<bool> FlatChanged { get; set; }
+    [Parameter] public bool Labels { get; set; }
+    [Parameter] public EventCallback<bool> LabelsChanged { get; set; }
+    [Parameter] public bool Immersive { get; set; }
+    [Parameter] public LaneColour Colour { get; set; }
+    [Parameter] public EventCallback<LaneColour> ColourChanged { get; set; }
+    [Parameter] public string? Product { get; set; }
+    [Parameter] public EventCallback<string?> ProductChanged { get; set; }
+    [Parameter] public IReadOnlyList<SkuView> Skus { get; set; } = [];
+    [Parameter] public EventCallback<string> OnCommand { get; set; }
+
+    private SkuView? Found => Product is null ? null : Skus.FirstOrDefault(sku => sku.Code == Product);
+
+    private IEnumerable<Resource> Resources
+    {
+        get
+        {
+            var k = Live.Kpis;
+            var taxisReady = Live.Taxis.Count(taxi => taxi.InService && taxi.FaultCode is null);
+            var liftsReady = Live.Lifts.Count(lift => lift.FaultCode is null);
+            var beltsRunning = Live.Conveyors.Count(belt => belt.State == ConveyorState.Running);
+            var moved = k.InLastHour + k.OutLastHour;
+            return
+            [
+                new("Storage", $"{Display.Count(k.Stored)} pallets in store out of {Display.Count(k.Capacity)} places.",
+                    "pallet", Display.Count(k.Stored), $"/{Display.Count(k.Capacity)}", k.Occupancy, k.Occupancy > 0.9 ? "warn" : "brand"),
+                new("Taxis ready", "Taxis in service without a fault. Click a Taxi in the view to charge, park or reset it.",
+                    "taxi", taxisReady.ToString(), $"/{Live.Taxis.Count}", Share(taxisReady, Live.Taxis.Count), taxisReady < Live.Taxis.Count ? "warn" : "ok"),
+                new("VTUs ready", "Vertical lifts without a fault. A stopped VTU makes Taxis wait at the dock.",
+                    "lift", liftsReady.ToString(), $"/{Live.Lifts.Count}", Share(liftsReady, Live.Lifts.Count), liftsReady < Live.Lifts.Count ? "crit" : "ok"),
+                new("Conveyors running", "Infeed and outfeed. A jammed outfeed stops dispatch until it is reset.",
+                    "conveyor", beltsRunning.ToString(), $"/{Live.Conveyors.Count}", Share(beltsRunning, Live.Conveyors.Count), beltsRunning < Live.Conveyors.Count ? "crit" : "ok"),
+                new("Moved in 1 hour", $"{k.InLastHour} stored and {k.OutLastHour} sent to the docks in the last 60 minutes.",
+                    "route", moved.ToString(), "/h", Math.Min(1, moved / 120.0), "info"),
+            ];
+        }
+    }
+
+    private static readonly (string Swatch, string Text)[] Busy = [("lane-busy", "Taxi on its way")];
+
+    private static readonly (string Swatch, string Text)[] Routes =
+    [
+        ("flow-in", "Route into store (putaway)"),
+        ("flow-out", "Route out of store (retrieval)"),
+    ];
+
+    private IEnumerable<(string Swatch, string Text)> Legend => Tones.Concat(Flat ? Busy : Routes);
+
+    private IEnumerable<(string Swatch, string Text)> Tones => Colour switch
+    {
+        LaneColour.Velocity =>
+        [
+            ("pip tone-v-a", "A · fast mover"),
+            ("pip tone-v-b", "B · medium"),
+            ("pip tone-v-c", "C · slow mover"),
+        ],
+        LaneColour.Expiry =>
+        [
+            ("pip tone-fresh", "More than a week"),
+            ("pip tone-week", "Within 7 days"),
+            ("pip tone-soon", "Within 3 days"),
+            ("pip tone-expired", "Past best before"),
+        ],
+        _ =>
+        [
+            ("pip tone-fill", "Stored pallet"),
+            ("pip tone-soon", "Expires within 3 days"),
+        ],
+    };
+
+    private static double Share(int part, int whole) => whole == 0 ? 0 : (double)part / whole;
+
+    private Task SetColourAsync(string value) => ColourChanged.InvokeAsync(Enum.Parse<LaneColour>(value));
+
+    private Task SetProductAsync(ChangeEventArgs e)
+    {
+        var code = e.Value?.ToString();
+        return ProductChanged.InvokeAsync(string.IsNullOrEmpty(code) ? null : code);
+    }
+}

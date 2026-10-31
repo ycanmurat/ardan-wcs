@@ -13,6 +13,7 @@ builder.Services.AddHttpClient<WcsApi>(client => client.BaseAddress = apiBase);
 builder.Services.AddSingleton<LiveFeed>();
 builder.Services.AddHostedService(services => services.GetRequiredService<LiveFeed>());
 builder.Services.AddScoped<UiState>();
+builder.Services.AddScoped<OperatorCommands>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var app = builder.Build();

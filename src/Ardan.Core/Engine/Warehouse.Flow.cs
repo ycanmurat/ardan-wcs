@@ -119,6 +119,7 @@ public sealed partial class Warehouse
 
         var order = OrderOf(pallet);
         var dock = order?.Dock ?? 1;
+        Score.Dispatched(Now, pallet.Id, dock);
         _journal.PalletChanged(pallet);
         _journal.Moved(new Movement(pallet.Id, Now, MovementKind.Dispatched, "Outfeed", $"Dock {dock}", null));
         Events.Add(Now, EventKind.Dispatched, $"{pallet.Id} reached dock {dock}{(order is null ? "" : $" for {order.Id}")}", pallet.Id);
@@ -212,6 +213,7 @@ public sealed partial class Warehouse
         _journal.OrderChanged(order);
         var result = order.Type == OrderType.Inbound ? "all stored" : $"all at dock {order.Dock}";
         Events.Add(Now, EventKind.Order, $"{order.Id} completed: {order.Quantity} × {NameOf(order.SkuCode)}, {result}", order.Id);
+        Score.Completed(Now, order);
     }
 
     private Job NewJob(JobKind kind, Pallet pallet, Place from, Place to, Order? order)

@@ -1,0 +1,49 @@
+@inject OperatorCommands Commands
+
+@{
+    var look = Display.Look(Lift.State);
+}
+<article class="machine-card tone-@look.Tone @(Selected ? "is-selected" : null)">
+    <header class="machine-card-head">
+        <span class="machine-card-icon"><Icon Name="lift" Size="18" /></span>
+        <div class="machine-card-title">
+            <strong>@Lift.Id</strong>
+            <span>Shaft @(Lift.Shaft + 1)</span>
+        </div>
+        <StateBadge Look="look" Side="bottom" />
+    </header>
+
+    <p class="machine-card-activity"><span>@Lift.Activity</span></p>
+
+    <div class="machine-card-body">
+        <LevelMeter Levels="Levels" Position="Lift.Position" Moving="Lift.State is LiftState.Moving or LiftState.Carrying"
+                    Label="@($"At level {Display.Num(Lift.Position, "0.0")}")" />
+        <div class="machine-card-route">
+            <span>Position</span>
+            <strong>Level @Display.Num(Lift.Position, "0.0")</strong>
+            <small>@(Lift.TaxiId is null ? "No Taxi on board" : $"{Lift.TaxiId} on board{(Lift.Loaded ? " with a pallet" : ", empty")}")</small>
+        </div>
+    </div>
+
+    <dl class="machine-card-facts">
+        <div><dt>Queue</dt><dd>@(Lift.Waiting == 0 ? "None" : $"{Lift.Waiting} waiting")</dd></div>
+        <div><dt>Speed</dt><dd>Up to 1.2 m/s</dd></div>
+        <div><dt>Limit</dt><dd>2,000 kg</dd></div>
+    </dl>
+
+    <footer class="machine-card-foot">
+        @if (Lift.FaultCode is not null)
+        {
+            <button type="button" class="btn btn-danger btn-sm" @onclick="() => OnConfirm.InvokeAsync(Commands.ResetLift(Lift))"><Icon Name="reset" Size="15" />Reset</button>
+        }
+        <button type="button" class="btn btn-ghost btn-sm machine-card-more" @onclick="() => OnOpen.InvokeAsync(Lift.Id)">Details<Icon Name="chevron-right" Size="14" /></button>
+    </footer>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public LiftView Lift { get; set; } = default!;
+    [Parameter] public int Levels { get; set; } = 6;
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public EventCallback<string> OnOpen { get; set; }
+    [Parameter] public EventCallback<Confirmation> OnConfirm { get; set; }
+}

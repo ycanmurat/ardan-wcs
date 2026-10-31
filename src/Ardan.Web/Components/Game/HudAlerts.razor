@@ -1,0 +1,49 @@
+<div class="hud-bottom">
+    @if (Live.Shift.Events.Count > 0)
+    {
+        <ol class="hud-feed" aria-label="Latest points" aria-live="off">
+            @foreach (var item in Live.Shift.Events.Take(FeedShown))
+            {
+                <li class="hud-feed-item @Display.ScoreClass(item)" @key="item.Seq">
+                    <span class="points-chip">@Display.Points(item)</span>
+                    <span class="hud-feed-text">@item.Text</span>
+                </li>
+            }
+        </ol>
+    }
+
+    @if (Live.ActiveAlarms.Count > 0)
+    {
+        <ul class="hud-alerts" aria-label="Needs you">
+            @foreach (var alarm in Live.ActiveAlarms.Take(AlertsShown))
+            {
+                var look = Display.Look(alarm.Severity);
+                <li class="hud-alert tone-@look.Tone" @key="alarm.Id">
+                    <button type="button" class="hud-alert-main" @onclick="() => OnSelect.InvokeAsync(alarm)" aria-label="@($"Show {alarm.Title} on {alarm.Source}")">
+                        <Icon Name="warning" Size="16" />
+                        <span class="hud-alert-text"><strong>@alarm.Source</strong><span>@alarm.Title</span></span>
+                    </button>
+                    @if (alarm.Action != AlarmAction.None && alarm.ActionLabel is not null)
+                    {
+                        <button type="button" class="hud-alert-fix" @onclick="() => OnFix.InvokeAsync(alarm)">
+                            <Icon Name="@(alarm.Action == AlarmAction.Reinduct ? "reset" : "wrench")" Size="14" />@alarm.ActionLabel
+                        </button>
+                    }
+                </li>
+            }
+            @if (Live.ActiveAlarms.Count > AlertsShown)
+            {
+                <li><a class="hud-alert-more" href="alarms">+@(Live.ActiveAlarms.Count - AlertsShown) more</a></li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    private const int FeedShown = 4;
+    private const int AlertsShown = 3;
+
+    [Parameter, EditorRequired] public LiveSnapshot Live { get; set; } = default!;
+    [Parameter] public EventCallback<AlarmView> OnSelect { get; set; }
+    [Parameter] public EventCallback<AlarmView> OnFix { get; set; }
+}

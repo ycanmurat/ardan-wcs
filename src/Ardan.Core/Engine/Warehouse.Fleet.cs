@@ -309,6 +309,7 @@ public sealed partial class Warehouse
             lane.Push(pallet);
             lane.Release(job.Id);
             Throughput.CountIn(Now);
+            Score.Stored(Now, pallet.Id, lane.Id);
             _journal.PalletChanged(pallet);
             _journal.Moved(new Movement(pallet.Id, Now, MovementKind.Stored, taxi.Id, lane.Id.ToString(), taxi.Id));
             Events.Add(Now, EventKind.Stored, $"{taxi.Id} stored {pallet.Id} in {lane.Id}", pallet.Id);

@@ -16,20 +16,23 @@ public static class HelpContent
     {
         "live" => new(
             "Live system",
-            "A front view of the rack, as if you were standing at the dock.",
+            "The whole store in 3D, run like a game: keep the work flowing, fix stops fast and the shift scores points.",
             [
-                "Each box is a lane. The dots show how many pallets it holds, up to six.",
-                "Taxis drive along the rails. The two VTUs on the left carry them between levels.",
-                "Amber dots are stock that expires within three days.",
-                "Type a product in Find to light up its lanes. Click a lane or a Taxi to see what is inside or what it is doing.",
+                "Drag to turn, right-drag or Shift + drag to move, scroll to zoom. On a touch screen one finger turns and two fingers move and zoom. Q and E turn, 0 shows the whole store, F is focus mode.",
+                "Green arrows lead a Taxi into store and blue arrows out of store. A frame marks the place it is going to.",
+                "Click a Taxi, VTU, conveyor or lane to see it on the right with its actions. A red ! marks a machine that needs you: hover it to see what happened.",
+                "Points: 10 per pallet stored, 15 per pallet sent, 50 per order on time, 25 for each stop you fix. Late orders and stops left for remote support cost points.",
+                "Stars follow how many of the last 20 orders finished on time. Goals pay a reward and come back harder.",
+                "Offers suggest work worth doing now. Nothing changes until you accept one.",
+                "2D in the right-hand toolbar shows the flat rack drawing. The layers button colours lanes and finds a product.",
             ]),
         "fleet" => new(
             "Fleet",
             "Every machine, what it is doing and what you can do with it.",
             [
-                "Click a row for details and actions.",
+                "Each card shows the battery, the level, where the machine is going and what it carries. Details opens the rest.",
                 "Send to charge: the Taxi finishes its job, then charges to 95%.",
-                "Take out of service: it parks at the dock and gets no new jobs. Use this before maintenance.",
+                "Take out of service (Park): it parks at the dock and gets no new jobs. Use this before maintenance.",
                 "Reset only appears when a machine has stopped. Check the area first.",
             ]),
         "orders" => new(
@@ -67,11 +70,12 @@ public static class HelpContent
             ]),
         _ => new(
             "Overview",
-            "A summary of the whole store, updated four times a second.",
+            "A summary of the whole store, updated every second.",
             [
+                "The top row is this shift: points, level, stars and the next goals, next to the state of the system.",
                 "Hover any ⓘ to see what a number means and how it is counted.",
-                "The fleet strip shows each Taxi and VTU. Click one to open it in Fleet.",
-                "Needs attention lists alarms with the first thing to do. Open Alarms for the full steps.",
+                "The fleet shows each Taxi with its battery ring and each VTU with its level. Click one to open it in Fleet.",
+                "Needs attention lists alarms with the first thing to do and the fix button. Offers suggest work worth doing now.",
                 "Use the search box, or press ⌘K, to find any pallet, order, product or machine.",
             ]),
     };

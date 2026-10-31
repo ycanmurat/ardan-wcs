@@ -1,5 +1,6 @@
 @page "/"
 @inherits LiveComponent
+@inject OperatorCommands Commands
 
 <PageTitle>Overview · Ardán</PageTitle>
 
@@ -11,35 +12,115 @@
 else
 {
     var k = live.Kpis;
+    var shift = live.Shift;
+    var running = live.Health.Level == HealthLevel.Running;
+    var levels = Feed.Layout?.Levels ?? 6;
+    var offers = live.Suggestions.Where(offer => !_dismissed.Contains(offer.Id)).ToList();
     <PageHeader Title="Overview" Subtitle="@($"{Feed.Layout?.Site} · live, updated {Display.Clock(live.Time)}")">
-        <a class="btn" href="live"><Icon Name="live" Size="16" />Open live view</a>
+        <a class="btn btn-primary" href="live"><Icon Name="live" Size="16" />Open live view</a>
     </PageHeader>
 
+    <div class="hero">
+        <section class="card shift-card" aria-label="Shift score">
+            <div class="shift-main">
+                <span class="shift-kicker"><Icon Name="trophy" Size="15" />This shift</span>
+                <Tip Title="Shift score" Text="@Display.ScoreHelp" Side="bottom">
+                    <span class="shift-points">
+                        <strong>@Display.Count(shift.Points)</strong>
+                        <span>points</span>
+                        @if (Display.Rate(shift, live.Time) is { } rate)
+                        {
+                            <small>@rate</small>
+                        }
+                    </span>
+                </Tip>
+                <Tip Title="@($"Level {shift.Level}")" Text="@Display.LevelHelp(shift)" Side="bottom" Class="shift-level-tip">
+                    <span class="shift-level">
+                        <span class="shift-badge">Lv @shift.Level</span>
+                        <span class="shift-xp"><i style="width: @Display.Num(Display.LevelShare(shift) * 100, "0.#")%"></i></span>
+                        <span class="shift-xp-text">@Display.Count(shift.LevelTo - shift.Earned) to Lv @(shift.Level + 1)</span>
+                    </span>
+                </Tip>
+                <Tip Title="Service rating" Text="@Display.RatingHelp(shift)" Side="bottom">
+                    <span class="shift-rating">
+                        <Stars Value="shift.Stars" />
+                        <span>@(shift.OrdersRated == 0 ? "No order finished yet" : $"{shift.OrdersOnTime} of {shift.OrdersRated} on time")</span>
+                    </span>
+                </Tip>
+                @if (shift.Events.Count > 0)
+                {
+                    <ol class="score-feed" aria-label="Latest points">
+                        @foreach (var item in shift.Events.Take(3))
+                        {
+                            <li class="@Display.ScoreClass(item)" @key="item.Seq">
+                                <span class="points-chip">@Display.Points(item)</span>
+                                <span>@item.Text</span>
+                            </li>
+                        }
+                    </ol>
+                }
+            </div>
+            <div class="shift-goals">
+                <header class="shift-goals-head">
+                    <h2>Goals</h2>
+                    <span class="muted">@shift.GoalsDone reached this shift</span>
+                </header>
+                <ol class="goals">
+                    @foreach (var goal in shift.Goals.Take(3))
+                    {
+                        <GoalRow @key="goal.Kind" Goal="goal" />
+                    }
+                </ol>
+            </div>
+        </section>
+
+        <section class="card status-card tone-@(running ? "ok" : "crit")" aria-label="System status">
+            <div class="status-head">
+                <span class="status-icon"><Icon Name="@(running ? "shield" : "warning")" Size="22" /></span>
+                <div class="status-title">
+                    <span class="status-kicker">System</span>
+                    <Tip Title="System status" Text="@TopBar.StatusHelp(live)" Side="bottom"><strong>@live.Health.Summary</strong></Tip>
+                </div>
+            </div>
+            <ul class="status-list">
+                <li>
+                    <span><Icon Name="taxi" Size="16" />Machines ready</span>
+                    <strong class="@(k.ReadyMachines < k.Machines ? "tone-warn" : null)">@k.ReadyMachines of @k.Machines</strong>
+                </li>
+                <li>
+                    <span><Icon Name="alarm" Size="16" />Active alarms</span>
+                    <strong class="@(AlarmTone(k) is { } alarmTone ? $"tone-{alarmTone}" : null)">@AlarmText(k)</strong>
+                </li>
+                <li>
+                    <span><Icon Name="thermometer" Size="16" />Store temperature</span>
+                    <strong class="@(live.Climate.TemperatureC > live.Climate.MaxC ? "tone-warn" : null)">@Display.Num(live.Climate.TemperatureC, "0.0") °C</strong>
+                </li>
+                <li>
+                    <span><Icon Name="orders" Size="16" />Open orders</span>
+                    <strong>@live.Orders.Inbound in · @live.Orders.Outbound out</strong>
+                </li>
+            </ul>
+            <p class="status-note">@MachinesNote(live)</p>
+        </section>
+    </div>
+
     <div class="kpis">
-        <KpiCard Label="Pallets in store" Value="@Display.Count(k.Stored)" Unit="@($"of {Display.Count(k.Capacity)}")"
+        <KpiCard Icon="pallet" Label="Pallets in store" Value="@Display.Count(k.Stored)" Unit="@($"of {Display.Count(k.Capacity)}")"
                  Help="Pallets stored in the rack now, out of all pallet places. Lanes are six pallets deep.">
             <ProgressBar Value="k.Stored" Max="k.Capacity" Tone="@(k.Occupancy > 0.9 ? "warn" : "brand")" />
             <span>@Display.Percent(k.Occupancy) full</span>
         </KpiCard>
-        <KpiCard Label="Moved in 1 hour" Value="@Display.Count(k.InLastHour + k.OutLastHour)" Unit="pallets"
-                 Help="Pallets stored (in) plus pallets sent to the docks (out) in the last 60 minutes.">
+        <KpiCard Icon="route" Label="Moved in 1 hour" Value="@Display.Count(k.InLastHour + k.OutLastHour)" Unit="pallets" Trend="Moved(live.Throughput)"
+                 Help="Pallets stored (in) plus pallets sent to the docks (out) in the last 60 minutes. The line shows the last hour, 10 minutes at a time.">
             <span class="split"><i class="key is-in"></i>@k.InLastHour in <i class="key is-out"></i>@k.OutLastHour out</span>
         </KpiCard>
-        <KpiCard Label="Machines ready" Value="@k.ReadyMachines.ToString()" Unit="@($"of {k.Machines}")" Tone="@(k.ReadyMachines < k.Machines ? "warn" : null)"
-                 Help="Taxis in service without a fault, plus VTUs without a fault.">
-            <span>@MachinesNote(live)</span>
-        </KpiCard>
-        <KpiCard Label="Cycle time" Value="@(k.AverageCycleSeconds > 0 ? Display.Num(k.AverageCycleSeconds, "0") : "—")" Unit="@(k.AverageCycleSeconds > 0 ? "s" : null)"
+        <KpiCard Icon="clock" Label="Cycle time" Value="@(k.AverageCycleSeconds > 0 ? Display.Num(k.AverageCycleSeconds, "0") : "—")" Unit="@(k.AverageCycleSeconds > 0 ? "s" : null)"
                  Help="Average time from giving a job to a Taxi until it sets the pallet down. Last 30 jobs.">
             <span>@(k.AverageCycleSeconds > 0 ? "Per pallet move" : "No job finished yet")</span>
         </KpiCard>
-        <KpiCard Label="Open orders" Value="@k.OpenOrders.ToString()" Tone="@(k.Late > 0 ? "warn" : null)"
+        <KpiCard Icon="orders" Label="Open orders" Value="@k.OpenOrders.ToString()" Tone="@(k.Late > 0 ? "warn" : null)"
                  Help="Inbound and outbound orders that are not finished yet. Late means past the due time.">
             <span>@k.DueSoon due in 30 min · @k.Late late</span>
-        </KpiCard>
-        <KpiCard Label="Active alarms" Value="@((k.CriticalAlarms + k.WarningAlarms).ToString())" Tone="@AlarmTone(k)"
-                 Help="Critical alarms mean a machine has stopped. Warnings are worth a look; the store keeps running.">
-            <span>@k.CriticalAlarms critical · @k.WarningAlarms warning</span>
         </KpiCard>
     </div>
 
@@ -50,8 +131,10 @@ else
             </CardHeader>
             <ThroughputChart Points="live.Throughput" />
         </section>
-        <section class="card">
-            <CardHeader Title="Storage" Help="How full the rack is, in total and per level. Level 0 is the ground floor, next to the conveyors." />
+        <section class="card storage-card">
+            <CardHeader Title="Storage" Help="How full the rack is, in total and per level. Level 0 is the ground floor, next to the conveyors.">
+                <a class="link" href="inventory">Inventory <Icon Name="chevron-right" Size="14" /></a>
+            </CardHeader>
             <div class="storage">
                 <OccupancyRing Share="k.Occupancy" Caption="full" />
                 <ul class="level-bars">
@@ -69,7 +152,7 @@ else
     </div>
 
     <section class="card">
-        <CardHeader Title="Fleet" Help="Every Taxi and VTU and what it is doing now. Click one for details and actions.">
+        <CardHeader Title="Fleet" Help="Every Taxi and VTU and what it is doing now. The ring is the battery. Click one for details and actions.">
             <a class="link" href="fleet">Open fleet <Icon Name="chevron-right" Size="14" /></a>
         </CardHeader>
         <div class="units">
@@ -77,38 +160,39 @@ else
             {
                 var look = Display.Look(taxi.State);
                 <a class="unit tone-@look.Tone" href="@($"fleet?select={taxi.Id}")" @key="taxi.Id">
-                    <span class="unit-head">
-                        <strong>@taxi.Id</strong>
-                        <Badge Text="@look.Label" Tone="@look.Tone" />
-                    </span>
-                    <span class="unit-activity">@taxi.Activity</span>
-                    <span class="unit-foot">
-                        <BatteryMeter Value="taxi.Battery" Charging="taxi.State == TaxiState.Charging" />
-                        <span class="muted">@(taxi.State == TaxiState.OnLift && taxi.LiftId is not null ? $"On {taxi.LiftId}" : $"Level {taxi.Level}")</span>
+                    <Gauge Value="taxi.Battery" Label="battery" Charging="taxi.State == TaxiState.Charging" Size="48" />
+                    <span class="unit-body">
+                        <span class="unit-head">
+                            <strong>@taxi.Id</strong>
+                            <Badge Text="@look.Label" Tone="@look.Tone" />
+                        </span>
+                        <span class="unit-activity">@taxi.Activity</span>
+                        <span class="unit-meta">@Display.Where(taxi)</span>
                     </span>
                 </a>
             }
             @foreach (var lift in live.Lifts)
             {
                 var look = Display.Look(lift.State);
-                <a class="unit is-lift tone-@look.Tone" href="@($"fleet?select={lift.Id}")" @key="lift.Id">
-                    <span class="unit-head">
-                        <strong>@lift.Id</strong>
-                        <Badge Text="@look.Label" Tone="@look.Tone" />
-                    </span>
-                    <span class="unit-activity">@lift.Activity</span>
-                    <span class="unit-foot">
-                        <span class="muted">VTU · level @Display.Num(lift.Position, "0.0")</span>
-                        <span class="muted">@(lift.Waiting == 0 ? "No queue" : $"{lift.Waiting} waiting")</span>
+                <a class="unit tone-@look.Tone" href="@($"fleet?select={lift.Id}")" @key="lift.Id">
+                    <LevelMeter Levels="levels" Position="lift.Position" Moving="lift.State is LiftState.Moving or LiftState.Carrying"
+                                Label="@($"At level {Display.Num(lift.Position, "0.0")}")" />
+                    <span class="unit-body">
+                        <span class="unit-head">
+                            <strong>@lift.Id</strong>
+                            <Badge Text="@look.Label" Tone="@look.Tone" />
+                        </span>
+                        <span class="unit-activity">@lift.Activity</span>
+                        <span class="unit-meta">VTU · @(lift.Waiting == 0 ? "no queue" : $"{lift.Waiting} waiting")</span>
                     </span>
                 </a>
             }
         </div>
     </section>
 
-    <div class="grid grid-half">
+    <div class="grid grid-thirds">
         <section class="card">
-            <CardHeader Title="Needs attention" Help="Active alarms, most serious first, with the first thing to do. Open Alarms for all the steps.">
+            <CardHeader Title="Needs attention" Help="Active alarms, most serious first, with the first thing to do. Fix them here or open Alarms for every step.">
                 <a class="link" href="alarms">All alarms <Icon Name="chevron-right" Size="14" /></a>
             </CardHeader>
             @if (live.ActiveAlarms.Count == 0)
@@ -127,13 +211,43 @@ else
                                 <strong>@alarm.Title</strong>
                                 <p>@alarm.Steps.FirstOrDefault()</p>
                                 <small>@alarm.Source · @Display.Ago(alarm.RaisedAt, Now)@(alarm.State == AlarmState.Acknowledged ? " · acknowledged" : null)</small>
+                                <span class="attention-actions">
+                                    @if (alarm.Action != AlarmAction.None && alarm.ActionLabel is not null)
+                                    {
+                                        <button type="button" class="btn btn-sm @(alarm.Action == AlarmAction.Reinduct ? "btn-primary" : "btn-danger")" @onclick="() => _confirm = Commands.AlarmFix(alarm)">
+                                            <Icon Name="@(alarm.Action == AlarmAction.Reinduct ? "reset" : "wrench")" Size="14" />@alarm.ActionLabel
+                                        </button>
+                                    }
+                                    @if (alarm.State == AlarmState.Active)
+                                    {
+                                        <button type="button" class="btn btn-sm" @onclick="() => Commands.AcknowledgeAsync(alarm)"><Icon Name="check" Size="14" />Acknowledge</button>
+                                    }
+                                    <a class="btn btn-ghost btn-sm" href="alarms">All steps</a>
+                                </span>
                             </div>
-                            <a class="btn btn-sm" href="alarms">Open</a>
                         </li>
                     }
                 </ul>
             }
         </section>
+
+        <section class="card">
+            <CardHeader Title="Offers" Help="Work worth doing now: rush an order that is nearly due, unblock a short order, clear stock near its best-before date or restock a fast mover. Each pays points when it is done on time." />
+            @if (offers.Count == 0)
+            {
+                <EmptyState Icon="spark" Tone="neutral" Title="No offers right now" Text="Offers appear when stock runs low, an order is short, stock nears its best-before date or an order is close to its due time." />
+            }
+            else
+            {
+                <ul class="offers">
+                    @foreach (var offer in offers)
+                    {
+                        <OfferCard @key="offer.Id" Offer="offer" Busy="_accepting == offer.Id" OnAccept="AcceptAsync" OnDismiss="Dismiss" />
+                    }
+                </ul>
+            }
+        </section>
+
         <section class="card">
             <CardHeader Title="Activity" Help="The latest events in the store, newest first. Times are site time in Dublin." />
             <ol class="feed">
@@ -149,9 +263,16 @@ else
             </ol>
         </section>
     </div>
+
+    <ConfirmDialog Request="_confirm" OnClose="() => _confirm = null" />
 }
 
 @code {
+    private const int TrendWindow = 10;
+    private readonly HashSet<string> _dismissed = [];
+    private Confirmation? _confirm;
+    private string? _accepting;
+
     protected override TimeSpan RefreshEvery => TimeSpan.FromSeconds(1);
 
     private IEnumerable<(int Level, int Stored, int Places)> Levels() =>
@@ -160,14 +281,42 @@ else
             .OrderByDescending(group => group.Key)
             .Select(group => (group.Key, group.Sum(lane => lane.Count), group.Sum(lane => lane.Depth)));
 
+    private static IReadOnlyList<double> Moved(IReadOnlyList<ThroughputPoint> points)
+    {
+        var moved = points.Select(point => point.In + point.Out).ToArray();
+        return Enumerable.Range(TrendWindow, Math.Max(0, moved.Length - TrendWindow + 1))
+            .Select(end => (double)moved[(end - TrendWindow)..end].Sum())
+            .ToList();
+    }
+
     private static string? AlarmTone(KpiSet k) => k.CriticalAlarms > 0 ? "crit" : k.WarningAlarms > 0 ? "warn" : null;
+
+    private static string AlarmText(KpiSet k) => k.CriticalAlarms + k.WarningAlarms == 0
+        ? "None"
+        : $"{k.CriticalAlarms} critical · {k.WarningAlarms} warning";
 
     private static string MachinesNote(LiveSnapshot live)
     {
         var notes = live.Taxis.Where(taxi => taxi.FaultCode is not null).Select(taxi => $"{taxi.Id} stopped")
             .Concat(live.Lifts.Where(lift => lift.FaultCode is not null).Select(lift => $"{lift.Id} stopped"))
+            .Concat(live.Conveyors.Where(belt => belt.State == ConveyorState.Jammed).Select(belt => $"{belt.Name} jammed"))
             .Concat(live.Taxis.Where(taxi => !taxi.InService).Select(taxi => $"{taxi.Id} out of service"))
             .ToList();
-        return notes.Count == 0 ? "Every Taxi and VTU can work" : string.Join(" · ", notes);
+        return notes.Count == 0 ? "Every Taxi, VTU and conveyor can work." : string.Join(" · ", notes);
+    }
+
+    private void Dismiss(SuggestionView offer) => _dismissed.Add(offer.Id);
+
+    private async Task AcceptAsync(SuggestionView offer)
+    {
+        _accepting = offer.Id;
+        try
+        {
+            if ((await Commands.AcceptAsync(offer)).Ok) _dismissed.Add(offer.Id);
+        }
+        finally
+        {
+            _accepting = null;
+        }
     }
 }

@@ -63,6 +63,8 @@ public sealed partial class Warehouse
         _asnNumber = seeds.Asn;
         _salesOrderNumber = seeds.SalesOrder;
         Alarms = new AlarmBoard(journal, seeds.Alarm);
+        Score = new ShiftScore(now);
+        Alarms.Closed += Score.Closed;
         Throughput.WarmUp(now, random);
     }
 
@@ -79,6 +81,7 @@ public sealed partial class Warehouse
     public AlarmBoard Alarms { get; }
     public EventLog Events { get; } = new();
     public ThroughputMeter Throughput { get; } = new();
+    public ShiftScore Score { get; }
     public IReadOnlyList<Taxi> Taxis => _taxis;
     public IReadOnlyList<Lift> Lifts => _lifts;
     public IReadOnlyDictionary<string, Sku> Skus => _skus;
@@ -162,7 +165,11 @@ public sealed partial class Warehouse
         Climate.Advance(seconds, _random);
         if (FaultsEnabled) InjectFaults(seconds);
         WatchConditions(seconds);
+        Score.Tick(Now, seconds, AllRunning);
     }
+
+    private bool AllRunning =>
+        _taxis.All(taxi => taxi.FaultCode is null) && _lifts.All(lift => lift.FaultCode is null) && Outfeed.FaultCode is null;
 
     private Order? OrderOf(Pallet pallet) => pallet.OrderId is null ? null : FindOrder(pallet.OrderId);
 

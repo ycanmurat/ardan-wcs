@@ -1,5 +1,6 @@
 using System.Globalization;
 using Ardan.Core.Alarms;
+using Ardan.Core.Contracts;
 using Ardan.Core.Engine;
 using Ardan.Core.Fleet;
 using Ardan.Core.Orders;
@@ -13,6 +14,7 @@ public sealed record StateLook(string Label, string Tone, string Help);
 /// <summary>Formats numbers, times and states the same way on every screen.</summary>
 public static class Display
 {
+    public const string InfeedId = "C-IN";
     private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
     private static readonly TimeZoneInfo SiteZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Dublin");
 
@@ -137,6 +139,67 @@ public static class Display
         _ => ("info", "neutral"),
     };
 
+    public const string ScoreHelp =
+        "10 points for each pallet stored, 15 for each pallet sent to a dock and 50 for each order finished on time. "
+        + "Fixing a stop yourself earns 25, and 25 more within a minute. Late orders and stops left for remote support cost points.";
+
+    public static string Points(ScoreEvent item) => item switch
+    {
+        { Kind: ScoreKind.Level } => "Lv",
+        { Points: > 0 } => $"+{item.Points}",
+        { Points: < 0 } => $"−{-item.Points}",
+        _ => "·",
+    };
+
+    public static string ScoreClass(ScoreEvent item) => item switch
+    {
+        { Kind: ScoreKind.Goal or ScoreKind.Level } => "is-big",
+        { Points: < 0 } => "is-loss",
+        _ => "is-gain",
+    };
+
+    public static double LevelShare(ShiftView shift) => shift.LevelTo == shift.LevelFrom
+        ? 0
+        : Math.Clamp((double)(shift.Earned - shift.LevelFrom) / (shift.LevelTo - shift.LevelFrom), 0, 1);
+
+    public static string? Rate(ShiftView shift, DateTimeOffset now)
+    {
+        var hours = (now - shift.StartedAt).TotalHours;
+        if (hours < 1.0 / 6) return null;
+        var rate = (int)Math.Round(shift.Points / hours);
+        return $"{(rate >= 0 ? "+" : "−")}{Count(Math.Abs(rate))}/h";
+    }
+
+    public static string LevelHelp(ShiftView shift) =>
+        $"{Count(shift.LevelTo - shift.Earned)} more points to level {shift.Level + 1}. Penalties lower the score, never the level.";
+
+    public static string RatingHelp(ShiftView shift) => shift.OrdersRated == 0
+        ? "Five stars until the first order finishes. Then it follows how many of the last 20 orders finished on time."
+        : $"{shift.OrdersOnTime} of the last {shift.OrdersRated} orders finished on time. Each late one costs at least half a star.";
+
+    public static (string Label, string Icon, string Tone) Look(SuggestionKind kind) => kind switch
+    {
+        SuggestionKind.Rush => ("Due soon", "clock", "warn"),
+        SuggestionKind.Unblock => ("Short order", "warning", "crit"),
+        SuggestionKind.Clear => ("Best before soon", "calendar", "warn"),
+        _ => ("Low stock", "inventory", "info"),
+    };
+
+    public static string Roman(int number) => number switch
+    {
+        1 => "I",
+        2 => "II",
+        3 => "III",
+        4 => "IV",
+        5 => "V",
+        6 => "VI",
+        7 => "VII",
+        8 => "VIII",
+        9 => "IX",
+        10 => "X",
+        _ => number.ToString(Invariant),
+    };
+
     public static string Label(MovementKind kind) => kind switch
     {
         MovementKind.Received => "Passed the profile check",
@@ -147,6 +210,30 @@ public static class Display
         MovementKind.Retrieved => "Picked from its lane",
         _ => "Sent to the dock",
     };
+
+    public static string Help(ConveyorView belt)
+    {
+        if (belt.State == ConveyorState.Jammed) return "Stopped by a jam. Clear it and reset the conveyor from Fleet or Alarms.";
+        var load = belt.Items.Count switch
+        {
+            0 => "Empty right now.",
+            1 => "1 pallet on it.",
+            var count => $"{count} pallets on it.",
+        };
+        return belt.Id == InfeedId
+            ? $"Brings pallets from goods-in to the rack at 0.18 m/s. {load}"
+            : $"Takes pallets from the rack to docks 1 to 3. {load}";
+    }
+
+    public static string Where(TaxiView taxi)
+    {
+        if (taxi.LiftId is not null && taxi.State == TaxiState.OnLift) return $"On {taxi.LiftId}";
+        return taxi.X < 0.05 ? $"Dock, level {taxi.Level}" : $"Level {taxi.Level}, bay {Num(taxi.X, "0.0")}";
+    }
+
+    public static string Pallets(int count) => count == 1 ? "1 pallet" : $"{count} pallets";
+
+    public static string ShortName(string skuName) => skuName.Split(',')[0];
 
     public static string Label(PalletStatus status) => status switch
     {

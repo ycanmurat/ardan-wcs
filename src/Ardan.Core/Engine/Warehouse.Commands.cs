@@ -11,6 +11,7 @@ public sealed partial class Warehouse
 {
     public const string Operator = "Operator";
     public const string RemoteSupport = "Remote support";
+    public const string Supervisor = "Supervisor";
 
     public static IReadOnlyList<double> Speeds { get; } = [1, 2, 5];
 

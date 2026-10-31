@@ -1,0 +1,24 @@
+@{
+    var look = Display.Look(Offer.Kind);
+}
+<li class="offer tone-@look.Tone">
+    <span class="offer-head">
+        <span class="offer-kind"><Icon Name="@look.Icon" Size="14" />@look.Label</span>
+        <Tip Text="Points this earns when it is done on time." Side="bottom"><span class="offer-reward">+@Offer.Reward</span></Tip>
+    </span>
+    <strong class="offer-title">@Offer.Title</strong>
+    <p class="offer-reason">@Offer.Reason</p>
+    <span class="offer-actions">
+        <button type="button" class="btn btn-primary btn-sm" disabled="@Busy" @onclick="() => OnAccept.InvokeAsync(Offer)">
+            <Icon Name="check" Size="15" />@(Offer.Kind == SuggestionKind.Rush ? "Make urgent" : "Accept")
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => OnDismiss.InvokeAsync(Offer)">Not now</button>
+    </span>
+</li>
+
+@code {
+    [Parameter, EditorRequired] public SuggestionView Offer { get; set; } = default!;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<SuggestionView> OnAccept { get; set; }
+    [Parameter] public EventCallback<SuggestionView> OnDismiss { get; set; }
+}

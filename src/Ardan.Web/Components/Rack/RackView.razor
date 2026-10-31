@@ -21,19 +21,19 @@ else
 
                 @foreach (var lane in Feed.Lanes.OrderBy(lane => lane.Level).ThenBy(lane => lane.Bay))
                 {
-                    <LaneCell @key="lane.Level * 1000 + lane.Bay" Lane="lane" Box="@g.LaneBox(lane.Level, lane.Bay)" Tone="@ToneOf(lane)"
+                    <LaneCell @key="lane.Level * 1000 + lane.Bay" Lane="lane" Box="@g.LaneBox(lane.Level, lane.Bay)" Tone="@LaneTone.Of(lane, Colour, Velocities, Now)"
                               Highlight="@(Product is not null && lane.SkuCode == Product)" Dimmed="@(Product is not null && lane.SkuCode != Product)"
                               Selected="@(SelectedLane == (lane.Level, lane.Bay))" TipClass="@TipClass(g, lane.Level, lane.Bay)" OnSelect="OnLaneSelected" />
                 }
 
                 @foreach (var belt in live.Conveyors)
                 {
-                    var inbound = belt.Id == InfeedId;
+                    var inbound = belt.Id == Display.InfeedId;
                     <span class="belt @(inbound ? "is-in" : "is-out") @(belt.State == ConveyorState.Jammed ? "is-jammed" : null)"
                           style="@g.Belt(inbound ? g.InfeedY : g.OutfeedY)" tabindex="0" aria-label="@belt.Name">
                         <span class="marker-tip">
                             <strong>@belt.Name</strong>
-                            <span class="muted">@BeltHelp(belt, inbound)</span>
+                            <span class="muted">@Display.Help(belt)</span>
                         </span>
                     </span>
                     foreach (var item in belt.Items)
@@ -93,7 +93,6 @@ else
 }
 
 @code {
-    private const string InfeedId = "C-IN";
     private RackGeometry? _geometry;
 
     [Parameter] public LaneColour Colour { get; set; }
@@ -118,36 +117,4 @@ else
             level >= g.Levels - 1 ? "tip-below" : null,
             bay <= 2 ? "tip-start" : bay >= g.Bays - 1 ? "tip-end" : null,
         }.Where(name => name is not null));
-
-    private string? ToneOf(LaneView lane)
-    {
-        if (lane.Count == 0 || lane.SkuCode is null) return null;
-        var daysLeft = lane.Expiry is { } expiry ? Display.DaysLeft(expiry, Now) : int.MaxValue;
-        return Colour switch
-        {
-            LaneColour.Velocity when Velocities?.TryGetValue(lane.SkuCode, out var velocity) == true => $"v-{velocity.ToString().ToLowerInvariant()}",
-            LaneColour.Expiry => daysLeft switch
-            {
-                < 0 => "expired",
-                <= 3 => "soon",
-                <= 7 => "week",
-                _ => "fresh",
-            },
-            _ => daysLeft <= 3 ? "soon" : "fill",
-        };
-    }
-
-    private static string BeltHelp(ConveyorView belt, bool inbound)
-    {
-        if (belt.State == ConveyorState.Jammed) return "Stopped by a jam. Clear it and reset the conveyor from Fleet or Alarms.";
-        var load = belt.Items.Count switch
-        {
-            0 => "Empty right now.",
-            1 => "1 pallet on it.",
-            var count => $"{count} pallets on it.",
-        };
-        return inbound
-            ? $"Brings pallets from goods-in to the rack at 0.18 m/s. {load}"
-            : $"Takes pallets from the rack to docks 1 to 3. {load}";
-    }
 }

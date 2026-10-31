@@ -1,13 +1,23 @@
 <section class="card kpi @(Tone is null ? null : $"tone-{Tone}")">
     <div class="kpi-head">
+        @if (Icon is not null)
+        {
+            <span class="kpi-icon"><Icon Name="@Icon" Size="17" /></span>
+        }
         <span class="kpi-label">@Label</span>
         <InfoTip Title="@Label" Text="@Help" Side="bottom" />
     </div>
-    <div class="kpi-value">
-        @Value
-        @if (Unit is not null)
+    <div class="kpi-body">
+        <div class="kpi-value">
+            @Value
+            @if (Unit is not null)
+            {
+                <span class="kpi-unit">@Unit</span>
+            }
+        </div>
+        @if (Trend is { Count: > 1 })
         {
-            <span class="kpi-unit">@Unit</span>
+            <Sparkline Values="Trend" Tone="@(Tone ?? "brand")" />
         }
     </div>
     <div class="kpi-foot">@ChildContent</div>
@@ -19,5 +29,7 @@
     [Parameter, EditorRequired] public string Value { get; set; } = "";
     [Parameter] public string? Unit { get; set; }
     [Parameter] public string? Tone { get; set; }
+    [Parameter] public string? Icon { get; set; }
+    [Parameter] public IReadOnlyList<double>? Trend { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

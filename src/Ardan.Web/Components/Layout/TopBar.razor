@@ -38,7 +38,7 @@
 </header>
 
 @code {
-    private static readonly IReadOnlyList<Choice> Speeds =
+    internal static readonly IReadOnlyList<Choice> Speeds =
     [
         new("1", "1×", "Real time, as on a live site."),
         new("2", "2×", "Twice as fast. Good for a walkthrough."),
@@ -48,7 +48,7 @@
     private async Task SetSpeedAsync(string value) =>
         Ui.Show(await Api.SetSpeedAsync(double.Parse(value, System.Globalization.CultureInfo.InvariantCulture)));
 
-    private static string StatusHelp(LiveSnapshot live) => live.Health.Level == HealthLevel.Running
+    internal static string StatusHelp(LiveSnapshot live) => live.Health.Level == HealthLevel.Running
         ? "Every Taxi, VTU and conveyor can work. Warnings, if any, do not stop the store."
         : "At least one machine has stopped. Open Alarms to see what happened and what to do.";
 }

@@ -1,0 +1,21 @@
+<div class="stat tone-@Tone">
+    <span class="stat-icon"><Icon Name="@Icon" Size="18" /></span>
+    <span class="stat-body">
+        <strong class="stat-value">
+            @Value
+            @if (Unit is not null)
+            {
+                <small>@Unit</small>
+            }
+        </strong>
+        <span class="stat-label">@Label</span>
+    </span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Icon { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string? Unit { get; set; }
+    [Parameter] public string Tone { get; set; } = "neutral";
+}

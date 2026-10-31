@@ -1,0 +1,135 @@
+<section class="hud-panel hud-board @(_collapsed ? "is-collapsed" : null)" aria-label="Jobs, offers and goals">
+    <header class="hud-tabs" role="tablist">
+        @foreach (var (key, label, count, tone) in Tabs)
+        {
+            <button type="button" role="tab" aria-selected="@(Tab == key ? "true" : "false")" class="hud-tab @(Tab == key ? "is-active" : null)"
+                    @onclick="() => SelectTabAsync(key)">
+                @label
+                @if (count > 0)
+                {
+                    <span class="hud-count tone-@tone">@count</span>
+                }
+            </button>
+        }
+        <button type="button" class="icon-btn hud-collapse" @onclick="() => _collapsed = !_collapsed"
+                aria-expanded="@(_collapsed ? "false" : "true")" aria-label="@(_collapsed ? "Show the board" : "Hide the board")">
+            <Icon Name="chevron-down" Size="16" />
+        </button>
+    </header>
+
+    @if (!_collapsed)
+    {
+        <div class="hud-board-body">
+            @switch (Tab)
+            {
+                case "offers":
+                    if (Offers.Count == 0)
+                    {
+                        <EmptyState Icon="spark" Tone="neutral" Title="No offers right now" Text="Offers appear when stock runs low, an order is short, stock nears its best-before date or an order is close to its due time." />
+                    }
+                    else
+                    {
+                        <ul class="offers">
+                            @foreach (var offer in Offers)
+                            {
+                                <OfferCard @key="offer.Id" Offer="offer" Busy="Busy == offer.Id" OnAccept="OnAccept" OnDismiss="OnDismiss" />
+                            }
+                        </ul>
+                    }
+                    break;
+
+                case "goals":
+                    <ol class="goals">
+                        @foreach (var goal in Goals)
+                        {
+                            <GoalRow @key="goal.Kind" Goal="goal" />
+                        }
+                    </ol>
+                    <p class="hint">Every goal pays its reward, then comes back one tier harder. A stop restarts the run without a stop.</p>
+                    break;
+
+                default:
+                    if (Orders.Count == 0)
+                    {
+                        <EmptyState Icon="orders" Tone="neutral" Title="No open orders" Text="New work arrives from the ERP every minute or so. Accept an offer to add your own." />
+                    }
+                    else
+                    {
+                        <ul class="jobs">
+                            @foreach (var order in Orders.Take(JobsShown))
+                            {
+                                var outbound = order.Type == OrderType.Outbound;
+                                var late = order.DueAt < Now;
+                                var soon = !late && order.DueAt - Now < TimeSpan.FromMinutes(10);
+                                <li @key="order.Id">
+                                    <button type="button" class="job @(order.Id == SelectedOrder ? "is-selected" : null)" @onclick="() => OnSelectOrder.InvokeAsync(order)"
+                                            aria-label="@($"{order.Id}: {order.Quantity} × {order.SkuName}, {Display.Due(order.DueAt, Now)}")">
+                                        <span class="job-head">
+                                            <Icon Name="@(outbound ? "arrow-up" : "arrow-down")" Size="14" Class="@($"dir {order.Type.ToString().ToLowerInvariant()}")" />
+                                            <strong>@order.Id</strong>
+                                            @if (order.Priority != Priority.Normal)
+                                            {
+                                                <Badge Text="@Display.Look(order.Priority).Label" Tone="@Display.Look(order.Priority).Tone" Dot="false" />
+                                            }
+                                            <span class="job-due @(late ? "is-late" : soon ? "is-soon" : null)">@Display.Due(order.DueAt, Now)</span>
+                                        </span>
+                                        <span class="job-what">
+                                            @order.Quantity × @Display.ShortName(order.SkuName) · @(outbound ? $"dock {order.Dock}" : "infeed")
+                                            @if (order.Status is OrderStatus.Short or OrderStatus.Exception)
+                                            {
+                                                <span class="job-flag">@Display.Look(order.Status).Label</span>
+                                            }
+                                        </span>
+                                        <ProgressBar Value="order.Done" Pending="order.InFlight" Max="order.Quantity" />
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                        if (Orders.Count > JobsShown)
+                        {
+                            <a class="link hud-more" href="orders">All @Orders.Count open orders <Icon Name="chevron-right" Size="14" /></a>
+                        }
+                    }
+                    break;
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private const int JobsShown = 8;
+    private bool _collapsed;
+    private string? _shown;
+
+    [Parameter] public string Tab { get; set; } = "jobs";
+    [Parameter] public EventCallback<string> TabChanged { get; set; }
+    [Parameter] public IReadOnlyList<OrderView> Orders { get; set; } = [];
+    [Parameter] public IReadOnlyList<SuggestionView> Offers { get; set; } = [];
+    [Parameter] public IReadOnlyList<GoalView> Goals { get; set; } = [];
+    [Parameter] public DateTimeOffset Now { get; set; }
+    [Parameter] public string? SelectedOrder { get; set; }
+    [Parameter] public string? Busy { get; set; }
+    [Parameter] public EventCallback<OrderView> OnSelectOrder { get; set; }
+    [Parameter] public EventCallback<SuggestionView> OnAccept { get; set; }
+    [Parameter] public EventCallback<SuggestionView> OnDismiss { get; set; }
+
+    private IEnumerable<(string Key, string Label, int Count, string Tone)> Tabs =>
+    [
+        ("jobs", "Jobs", Orders.Count, Orders.Any(order => order.DueAt < Now) ? "crit" : "neutral"),
+        ("offers", "Offers", Offers.Count, "gold"),
+        ("goals", "Goals", 0, "neutral"),
+    ];
+
+    protected override void OnParametersSet()
+    {
+        if (Tab == _shown) return;
+        _shown = Tab;
+        _collapsed = false;
+    }
+
+    private async Task SelectTabAsync(string key)
+    {
+        _collapsed = false;
+        if (key != Tab) await TabChanged.InvokeAsync(key);
+    }
+}

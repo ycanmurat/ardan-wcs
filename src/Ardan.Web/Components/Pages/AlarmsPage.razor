@@ -1,7 +1,7 @@
 @page "/alarms"
 @inherits LiveComponent
 @inject WcsApi Api
-@inject UiState Ui
+@inject OperatorCommands Commands
 
 <PageTitle>Alarms · Ardán</PageTitle>
 
@@ -13,6 +13,17 @@
 else
 {
     <PageHeader Title="Alarms" Subtitle="@Summary(live)" />
+
+    var fixedByPeople = _history.Count(alarm => alarm.ClearedBy is Warehouse.Operator or Warehouse.Supervisor);
+    var remote = _history.Count(alarm => alarm.ClearedBy == Warehouse.RemoteSupport);
+    <div class="stat-strip">
+        <StatTile Icon="alarm" Label="Active now" Value="@live.ActiveAlarms.Count.ToString()"
+                  Tone="@(live.Kpis.CriticalAlarms > 0 ? "crit" : live.Kpis.WarningAlarms > 0 ? "warn" : "ok")" />
+        <StatTile Icon="clock" Label="Closed alarms" Value="@_history.Count.ToString()" Tone="neutral" />
+        <StatTile Icon="wrench" Label="Fixed by your team" Value="@fixedByPeople.ToString()" Tone="brand" />
+        <StatTile Icon="user" Label="Left to remote support" Value="@remote.ToString()" Tone="@(remote > 0 ? "warn" : "neutral")" />
+        <StatTile Icon="gauge" Label="Typical time open" Value="@TypicalOpen()" Tone="info" />
+    </div>
 
     if (live.ActiveAlarms.Count == 0)
     {
@@ -70,11 +81,11 @@ else
                             }
                             @if (alarm.State == AlarmState.Active)
                             {
-                                <button type="button" class="btn" @onclick="() => AcknowledgeAsync(alarm)"><Icon Name="check" Size="16" />Acknowledge</button>
+                                <button type="button" class="btn" @onclick="() => Commands.AcknowledgeAsync(alarm)"><Icon Name="check" Size="16" />Acknowledge</button>
                             }
                             @if (alarm.Action != AlarmAction.None && alarm.ActionLabel is not null)
                             {
-                                <button type="button" class="btn @(alarm.Action == AlarmAction.Reinduct ? "btn-primary" : "btn-danger")" @onclick="() => ConfirmAction(alarm)">
+                                <button type="button" class="btn @(alarm.Action == AlarmAction.Reinduct ? "btn-primary" : "btn-danger")" @onclick="() => _confirm = Commands.AlarmFix(alarm)">
                                     <Icon Name="@(alarm.Action == AlarmAction.Reinduct ? "reset" : "wrench")" Size="16" />@alarm.ActionLabel
                                 </button>
                             }
@@ -106,7 +117,7 @@ else
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var alarm in _history.Take(40))
+                        @foreach (var alarm in _history.Take(_historyShown))
                         {
                             <tr @key="alarm.Id">
                                 <td>@Display.Date(alarm.RaisedAt)</td>
@@ -120,6 +131,14 @@ else
                     </tbody>
                 </table>
             </div>
+            if (_history.Count > _historyShown)
+            {
+                <div class="table-more">
+                    <button type="button" class="btn btn-ghost btn-sm" @onclick="() => _historyShown += HistoryPage">
+                        Show @Math.Min(HistoryPage, _history.Count - _historyShown) older<Icon Name="chevron-down" Size="14" />
+                    </button>
+                </div>
+            }
         }
     </section>
 
@@ -129,7 +148,9 @@ else
 @code {
     private static readonly TimeSpan RemoteResetAfter = TimeSpan.FromMinutes(4);
     private static readonly TimeSpan ReturnAfter = TimeSpan.FromMinutes(10);
+    private const int HistoryPage = 12;
     private IReadOnlyList<AlarmView> _history = [];
+    private int _historyShown = HistoryPage;
     private string _activeKey = "";
     private DateTime _historyLoaded;
     private Confirmation? _confirm;
@@ -174,29 +195,14 @@ else
         _ => alarm.Severity == Severity.Warning ? "Clears by itself when the cause goes away." : null,
     };
 
-    private static string Duration(AlarmView alarm)
-    {
-        if (alarm.ClearedAt is not { } cleared) return "—";
-        var span = cleared - alarm.RaisedAt;
-        return span < TimeSpan.FromMinutes(1) ? $"{Math.Max(1, (int)span.TotalSeconds)} s" : $"{(int)span.TotalMinutes} min";
-    }
+    private static string Duration(AlarmView alarm) => alarm.ClearedAt is { } cleared ? Span(cleared - alarm.RaisedAt) : "—";
 
-    private async Task AcknowledgeAsync(AlarmView alarm) => Ui.Show(await Api.AcknowledgeAsync(alarm.Id));
+    private static string Span(TimeSpan span) =>
+        span < TimeSpan.FromMinutes(1) ? $"{Math.Max(1, (int)span.TotalSeconds)} s" : $"{(int)span.TotalMinutes} min";
 
-    private void ConfirmAction(AlarmView alarm)
+    private string TypicalOpen()
     {
-        var text = alarm.Action switch
-        {
-            AlarmAction.ResetTaxi => $"Only reset {alarm.Source} once the aisle is clear of people and objects. It carries on with its job.",
-            AlarmAction.ResetLift => $"Only reset {alarm.Source} once the shaft is clear. Taxis waiting for it carry on.",
-            AlarmAction.ResetConveyor => "Only reset once the jammed pallet is cleared and nobody is near the rollers.",
-            _ => "Confirm the pallet has been fixed: restacked, re-wrapped or relabelled. It goes back on the infeed and is checked again.",
-        };
-        _confirm = new(
-            $"{alarm.ActionLabel}?",
-            text,
-            alarm.ActionLabel ?? "Confirm",
-            async () => Ui.Show(await Api.AlarmActionAsync(alarm.Id)),
-            alarm.Action == AlarmAction.Reinduct ? "primary" : "danger");
+        var spans = _history.Where(alarm => alarm.ClearedAt is not null).Select(alarm => alarm.ClearedAt!.Value - alarm.RaisedAt).Order().ToList();
+        return spans.Count == 0 ? "—" : Span(spans[spans.Count / 2]);
     }
 }

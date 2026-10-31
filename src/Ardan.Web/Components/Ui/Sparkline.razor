@@ -1,0 +1,23 @@
+<svg class="sparkline tone-@Tone" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    <path class="sparkline-area" d="@Area" />
+    <path class="sparkline-line" d="@Line" />
+</svg>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<double> Values { get; set; } = [];
+    [Parameter] public string Tone { get; set; } = "brand";
+
+    private IEnumerable<(double X, double Y)> Points
+    {
+        get
+        {
+            if (Values.Count < 2) return [(0, 30), (100, 30)];
+            var top = Math.Max(1, Values.Max());
+            return Values.Select((value, i) => (i * 100.0 / (Values.Count - 1), 30 - value / top * 26));
+        }
+    }
+
+    private string Line => "M" + string.Join(" L", Points.Select(p => $"{Display.Num(p.X, "0.##")} {Display.Num(p.Y, "0.##")}"));
+
+    private string Area => $"{Line} L100 32 L0 32 Z";
+}

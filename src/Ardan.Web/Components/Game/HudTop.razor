@@ -1,0 +1,72 @@
+@inject WcsApi Api
+@inject UiState Ui
+
+<div class="hud-top">
+    <section class="hud-panel hud-score" aria-label="Shift score">
+        <div class="hud-score-row">
+            <span class="hud-coin" aria-hidden="true"><Icon Name="spark" Size="16" Stroke="2.2" /></span>
+            <Tip Title="Shift score" Text="@Display.ScoreHelp" Side="bottom">
+                <strong class="hud-points"><span class="hud-bump" @key="Shift.Points">@Display.Count(Shift.Points)</span><small>pts</small></strong>
+            </Tip>
+            @if (Display.Rate(Shift, Live.Time) is { } rate)
+            {
+                <span class="hud-rate">@rate</span>
+            }
+        </div>
+        <Tip Title="@($"Level {Shift.Level}")" Text="@Display.LevelHelp(Shift)" Side="bottom" Class="hud-level-tip">
+            <span class="hud-level">
+                <span class="hud-level-badge">Lv @Shift.Level</span>
+                <span class="hud-xp"><i style="width: @Display.Num(Display.LevelShare(Shift) * 100, "0.#")%"></i></span>
+                <span class="hud-xp-text">@Display.Count(Shift.Earned - Shift.LevelFrom) / @Display.Count(Shift.LevelTo - Shift.LevelFrom)</span>
+            </span>
+        </Tip>
+    </section>
+
+    <section class="hud-panel hud-clock" aria-label="Time and speed">
+        <Tip Title="System status" Text="@TopBar.StatusHelp(Live)" Side="bottom">
+            <span class="status-pill tone-@(Live.Health.Level == HealthLevel.Running ? "ok" : "crit")">
+                <i class="pulse"></i><span class="hud-health">@Live.Health.Summary</span>
+            </span>
+        </Tip>
+        <Tip Title="Site time" Text="Local time at the site in Dublin. In a faster demo the clock runs faster too." Side="bottom">
+            <span class="hud-time">@Display.Clock(Live.Time)</span>
+        </Tip>
+        <Segmented Choices="TopBar.Speeds" Value="@Display.Num(Live.Speed)" ValueChanged="SetSpeedAsync" Label="Demo speed" Class="hud-speed" />
+    </section>
+
+    <section class="hud-panel hud-status" aria-label="Rating, goals and alarms">
+        <Tip Title="Service rating" Text="@Display.RatingHelp(Shift)" Side="bottom">
+            <Stars Value="Shift.Stars" />
+        </Tip>
+        <Tip Text="Goals reached this shift. Open the list of goals." Side="bottom">
+            <button type="button" class="hud-chip" @onclick="OnGoals" aria-label="@($"{Shift.GoalsDone} goals reached")">
+                <Icon Name="flag" Size="15" />@Shift.GoalsDone
+            </button>
+        </Tip>
+        <Tip Text="@(Live.ActiveAlarms.Count == 0 ? "No active alarms." : "Active alarms. Go to the most urgent one.")" Side="bottom">
+            <button type="button" class="hud-chip @(AlarmTone is { } tone ? $"tone-{tone}" : null)" @onclick="OnAlarms"
+                    aria-label="@($"{Live.ActiveAlarms.Count} active alarms")">
+                <Icon Name="alarm" Size="15" />@Live.ActiveAlarms.Count
+            </button>
+        </Tip>
+        <Tip Title="Store temperature" Text="Chilled store. The target is 0 to 5 °C. An alarm is raised above 5 °C." Side="bottom" Class="hud-temp">
+            <span class="hud-chip @(Live.Climate.TemperatureC > Live.Climate.MaxC ? "tone-warn" : null)">
+                <Icon Name="thermometer" Size="15" />@Display.Num(Live.Climate.TemperatureC, "0.0") °C
+            </span>
+        </Tip>
+        <button type="button" class="icon-btn" @onclick="Ui.ToggleHelp" aria-label="Help for this page"><Icon Name="help" /></button>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public LiveSnapshot Live { get; set; } = default!;
+    [Parameter] public EventCallback OnGoals { get; set; }
+    [Parameter] public EventCallback OnAlarms { get; set; }
+
+    private ShiftView Shift => Live.Shift;
+
+    private string? AlarmTone => Live.Kpis.CriticalAlarms > 0 ? "crit" : Live.Kpis.WarningAlarms > 0 ? "warn" : null;
+
+    private async Task SetSpeedAsync(string value) =>
+        Ui.Show(await Api.SetSpeedAsync(double.Parse(value, System.Globalization.CultureInfo.InvariantCulture)));
+}

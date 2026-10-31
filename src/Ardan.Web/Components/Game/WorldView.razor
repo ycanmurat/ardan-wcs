@@ -1,0 +1,272 @@
+@inherits LiveComponent
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject ILogger<WorldView> Logger
+
+<div class="world" @ref="_host" role="img"
+     aria-label="3D view of the store. Drag to turn, right-drag to move, scroll or pinch to zoom. Click a Taxi, VTU, conveyor or lane to see it in the side panel."></div>
+
+@code {
+    private const string ModulePath = "./js/world.js";
+    private readonly Dictionary<(int Level, int Bay), int> _sent = [];
+    private ElementReference _host;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _world;
+    private DotNetObjectReference<WorldView>? _self;
+    private (LaneColour, string?, DateOnly, int)? _look;
+    private string? _highlight;
+    private bool? _labels;
+    private bool _starting;
+    private bool _closed;
+
+    [Parameter] public LaneColour Colour { get; set; }
+    [Parameter] public string? Product { get; set; }
+    [Parameter] public string? Highlight { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, Velocity>? Velocities { get; set; }
+    [Parameter] public bool Labels { get; set; } = true;
+    [Parameter] public EventCallback<Selection?> OnPick { get; set; }
+    [Parameter] public EventCallback<bool> OnImmersive { get; set; }
+    [Parameter] public EventCallback OnUnavailable { get; set; }
+
+    public static string SpotOf(AlarmView alarm) => alarm.Code.StartsWith("PRF-", StringComparison.Ordinal) ? "Reject" : alarm.Source;
+
+    public Task CommandAsync(string name) => CallAsync("command", name);
+
+    public Task FocusAsync(string spot) => CallAsync("focus", spot);
+
+    [JSInvokable]
+    public Task Pick(string kind, string id) =>
+        OnPick.InvokeAsync(Enum.TryParse<SelectionKind>(kind, out var parsed) ? new Selection(parsed, id) : null);
+
+    [JSInvokable]
+    public Task Immersive(bool on) => OnImmersive.InvokeAsync(on);
+
+    protected override bool ShouldRender() => false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await StartAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_world is null) return;
+        if (_labels != Labels)
+        {
+            _labels = Labels;
+            await CallAsync("labels", Labels);
+        }
+        if (_highlight != Highlight || _look != Look) await PushAsync();
+    }
+
+    protected override Task OnLiveAsync() => _world is null ? StartAsync() : PushAsync();
+
+    private (LaneColour, string?, DateOnly, int) Look => (Colour, Product, DateOnly.FromDateTime(Display.Local(Now).Date), Velocities?.Count ?? 0);
+
+    private async Task StartAsync()
+    {
+        if (_starting || _closed || _world is not null || Feed.Layout is not { } layout || Live is not { } live) return;
+        _starting = true;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            if (!await _module.InvokeAsync<bool>("supported"))
+            {
+                await OnUnavailable.InvokeAsync();
+                return;
+            }
+            _self ??= DotNetObjectReference.Create(this);
+            _world = await _module.InvokeAsync<IJSObjectReference>("create", _host, _self, Setup(layout, live));
+            if (_closed) return;
+            _sent.Clear();
+            _look = null;
+            _labels = Labels;
+            await CallAsync("labels", Labels);
+            await PushAsync();
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "The 3D view could not start. Showing the rack drawing instead.");
+            await OnUnavailable.InvokeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        finally
+        {
+            _starting = false;
+            if (_closed) await ReleaseAsync();
+        }
+    }
+
+    private async Task PushAsync()
+    {
+        if (_world is null || Live is not { } live) return;
+        await CallAsync("update", Frame(live));
+    }
+
+    private async Task CallAsync(string method, params object?[] args)
+    {
+        if (_world is null) return;
+        try
+        {
+            await _world.InvokeVoidAsync(method, args);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (JSException exception)
+        {
+            Logger.LogWarning(exception, "The 3D view could not run {Method}.", method);
+        }
+    }
+
+    private static WorldSetup Setup(Ardan.Core.Contracts.LayoutView layout, LiveSnapshot live) => new(
+        layout.Levels,
+        layout.Bays,
+        layout.LaneDepth,
+        layout.BayPitchMetres,
+        layout.LevelHeightMetres,
+        layout.PalletPitchMetres,
+        layout.Lifts,
+        live.Conveyors.Select(belt => new WorldBeltSetup(belt.Id, belt.Name, belt.Id == Display.InfeedId)).ToList(),
+        live.Conveyors.FirstOrDefault()?.Length ?? Motion.ConveyorLength,
+        Motion.ProfileCheckAt,
+        Limits.Docks);
+
+    private WorldFrame Frame(LiveSnapshot live)
+    {
+        var look = Look;
+        var everyLane = look != _look;
+        _look = look;
+        _highlight = Highlight;
+
+        var lanes = new List<WorldLane>();
+        foreach (var lane in Feed.Lanes)
+        {
+            var key = (lane.Level, lane.Bay);
+            if (!everyLane && _sent.TryGetValue(key, out var version) && version == lane.Version) continue;
+            _sent[key] = lane.Version;
+            lanes.Add(Draw(lane));
+        }
+
+        var rejects = live.ActiveAlarms.Count(alarm => SpotOf(alarm) == "Reject");
+        return new WorldFrame(
+            live.Speed,
+            live.Taxis.Select(taxi => Draw(taxi, live)).ToList(),
+            live.Lifts.Select(Draw).ToList(),
+            live.Conveyors.Select(Draw).ToList(),
+            lanes,
+            Markers(live),
+            live.Shift.Events,
+            rejects,
+            rejects == 0
+                ? "Reject lane\nEmpty. Pallets that fail the profile check wait here for a fix."
+                : $"Reject lane\n{Display.Pallets(rejects)} waiting for a fix. Click to re-induct.",
+            Highlight);
+    }
+
+    private WorldLane Draw(LaneView lane)
+    {
+        var lines = new List<string> { new LaneId(lane.Level, lane.Bay).ToString() };
+        if (lane.SkuName is null)
+        {
+            lines.Add("Empty. Ready for a new batch.");
+        }
+        else
+        {
+            lines.Add(lane.SkuName);
+            lines.Add($"{lane.Count} of {lane.Depth} places · batch {lane.Batch}");
+            if (lane.Expiry is { } expiry) lines.Add($"Best before {Display.Day(expiry)}");
+        }
+        if (lane.Busy) lines.Add("A Taxi is on its way to this lane.");
+
+        var match = Product is not null && lane.SkuCode == Product;
+        return new WorldLane(lane.Level, lane.Bay, lane.Count, LaneTone.Of(lane, Colour, Velocities, Now), lane.Busy,
+            match, Product is not null && !match, string.Join('\n', lines));
+    }
+
+    private static WorldTaxi Draw(TaxiView taxi, LiveSnapshot live)
+    {
+        var look = Display.Look(taxi.State);
+        var ride = live.Lifts.FirstOrDefault(lift => lift.TaxiId == taxi.Id);
+        var loaded = taxi.PalletId is not null;
+        var inbound = taxi.JobKind == JobKind.Putaway;
+        var heading = loaded ? taxi.To : taxi.From;
+        var route = taxi.JobKind is null ? "" : $"\n{(inbound ? "Into store" : "Out of store")}: {taxi.From} → {taxi.To}";
+        var label = taxi switch
+        {
+            { FaultCode: not null } => $"{taxi.Id} !",
+            { JobKind: not null } => $"{taxi.Id} {(inbound ? "↓" : "↑")} {heading}",
+            { State: TaxiState.Charging } => $"{taxi.Id} ⚡",
+            _ => taxi.Id,
+        };
+        return new WorldTaxi(
+            taxi.Id,
+            taxi.Level,
+            taxi.X,
+            ride?.Id,
+            loaded,
+            look.Tone,
+            $"{taxi.Id} · {look.Label}\n{taxi.Activity}{route}\nBattery {Display.Num(taxi.Battery, "0")}% · level {taxi.Level}",
+            label,
+            taxi.JobKind is null ? null : inbound ? "in" : "out",
+            taxi.From,
+            taxi.To,
+            taxi.State switch
+            {
+                TaxiState.Loading => "pick",
+                TaxiState.Unloading => "drop",
+                _ => null,
+            },
+            taxi.Handling);
+    }
+
+    private static WorldLift Draw(LiftView lift)
+    {
+        var look = Display.Look(lift.State);
+        var queue = lift.Waiting == 0 ? "" : $"\n{lift.Waiting} waiting for a ride";
+        return new WorldLift(lift.Id, lift.Shaft, lift.Position, look.Tone, $"{lift.Id} · {look.Label}\n{lift.Activity}{queue}");
+    }
+
+    private static WorldBelt Draw(ConveyorView belt) =>
+        new(belt.Id, belt.State == ConveyorState.Running, belt.Length, belt.Items, $"{belt.Name}\n{Display.Help(belt)}");
+
+    private static List<WorldMarker> Markers(LiveSnapshot live) =>
+        live.ActiveAlarms
+            .GroupBy(SpotOf)
+            .Select(group => group.OrderByDescending(alarm => alarm.Severity).First())
+            .Select(alarm => new WorldMarker(SpotOf(alarm), alarm.Id, Display.Look(alarm.Severity).Tone, $"{alarm.Title} · {alarm.Source}",
+                $"{alarm.What} Click to see the steps and fix it."))
+            .ToList();
+
+    public async ValueTask DisposeAsync()
+    {
+        _closed = true;
+        Dispose();
+        if (!_starting) await ReleaseAsync();
+    }
+
+    private async Task ReleaseAsync()
+    {
+        var (world, module) = (_world, _module);
+        (_world, _module) = (null, null);
+        try
+        {
+            if (world is not null)
+            {
+                await world.InvokeVoidAsync("dispose");
+                await world.DisposeAsync();
+            }
+            if (module is not null) await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (JSException exception)
+        {
+            Logger.LogDebug(exception, "The 3D view was already gone.");
+        }
+        _self?.Dispose();
+    }
+}

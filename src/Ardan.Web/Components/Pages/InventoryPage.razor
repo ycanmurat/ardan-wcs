@@ -12,20 +12,20 @@
     var lanes = Feed.Lanes.ToList();
     var expiring = lanes.Where(lane => lane.Expiry is { } expiry && Display.DaysLeft(expiry, Now) <= 3).Sum(lane => lane.Count);
     var empty = lanes.Count(lane => lane.Count == 0 && !lane.Busy);
-    <div class="kpis kpis-4">
-        <KpiCard Label="Pallets in store" Value="@Display.Count(live.Kpis.Stored)" Unit="@($"of {Display.Count(live.Kpis.Capacity)}")"
+    <div class="kpis">
+        <KpiCard Icon="pallet" Label="Pallets in store" Value="@Display.Count(live.Kpis.Stored)" Unit="@($"of {Display.Count(live.Kpis.Capacity)}")"
                  Help="Every pallet stored in the rack now.">
             <span>@Display.Percent(live.Kpis.Occupancy) of all places</span>
         </KpiCard>
-        <KpiCard Label="Products in stock" Value="@_skus.Count(sku => sku.Pallets > 0).ToString()" Unit="@($"of {_skus.Count}")"
+        <KpiCard Icon="inventory" Label="Products in stock" Value="@_skus.Count(sku => sku.Pallets > 0).ToString()" Unit="@($"of {_skus.Count}")"
                  Help="Products from the item master with at least one pallet in store.">
             <span>@_skus.Count(sku => sku.Pallets == 0) out of stock</span>
         </KpiCard>
-        <KpiCard Label="Best before within 3 days" Value="@expiring.ToString()" Unit="pallets" Tone="@(expiring > 0 ? "warn" : null)"
+        <KpiCard Icon="calendar" Label="Best before within 3 days" Value="@expiring.ToString()" Unit="pallets" Tone="@(expiring > 0 ? "warn" : null)"
                  Help="Pallets whose best-before date is today or in the next three days. They leave first on the next order for their product.">
             <span>Shown in amber on the live view</span>
         </KpiCard>
-        <KpiCard Label="Empty lanes" Value="@empty.ToString()" Unit="@($"of {lanes.Count}")"
+        <KpiCard Icon="layers" Label="Empty lanes" Value="@empty.ToString()" Unit="@($"of {lanes.Count}")"
                  Help="Lanes with no pallets and no Taxi on its way. Each new batch needs an empty lane, or a lane with the same batch.">
             <span>Ready for new batches</span>
         </KpiCard>

@@ -10,6 +10,9 @@ namespace Ardan.Core.Contracts;
 [JsonConverter(typeof(JsonStringEnumConverter<HealthLevel>))]
 public enum HealthLevel { Running, Attention }
 
+[JsonConverter(typeof(JsonStringEnumConverter<SuggestionKind>))]
+public enum SuggestionKind { Rush, Unblock, Clear, Restock }
+
 public sealed record SystemHealth(HealthLevel Level, string Summary);
 
 public sealed record LayoutView(
@@ -18,6 +21,7 @@ public sealed record LayoutView(
     int LaneDepth,
     double BayPitchMetres,
     double LevelHeightMetres,
+    double PalletPitchMetres,
     IReadOnlyList<string> Lifts,
     string Company,
     string Site);
@@ -47,6 +51,9 @@ public sealed record TaxiView(
     string? SkuName,
     string? JobId,
     JobKind? JobKind,
+    string? From,
+    string? To,
+    double? Handling,
     string? LiftId,
     double SpeedMs,
     double MotorTempC,
@@ -113,6 +120,32 @@ public sealed record OrderCounts(int Open, int Inbound, int Outbound, int Except
 
 public sealed record ClimateView(double TemperatureC, double MinC, double MaxC);
 
+public sealed record GoalView(GoalKind Kind, string Title, int Tier, double Progress, double Target, int Reward);
+
+public sealed record ShiftView(
+    DateTimeOffset StartedAt,
+    int Points,
+    int Earned,
+    int Level,
+    int LevelFrom,
+    int LevelTo,
+    double Stars,
+    int OrdersRated,
+    int OrdersOnTime,
+    int GoalsDone,
+    IReadOnlyList<GoalView> Goals,
+    IReadOnlyList<ScoreEvent> Events);
+
+/// <summary>Work worth doing now. Rush raises an order to urgent; the other kinds create the order they carry.</summary>
+public sealed record SuggestionView(
+    string Id,
+    SuggestionKind Kind,
+    string Title,
+    string Reason,
+    int Reward,
+    NewOrder? Order,
+    string? OrderId);
+
 public sealed record LiveSnapshot(
     long Version,
     DateTimeOffset Time,
@@ -127,7 +160,9 @@ public sealed record LiveSnapshot(
     IReadOnlyList<AlarmView> ActiveAlarms,
     IReadOnlyList<EventView> Events,
     OrderCounts Orders,
-    ClimateView Climate);
+    ClimateView Climate,
+    ShiftView Shift,
+    IReadOnlyList<SuggestionView> Suggestions);
 
 public sealed record OrderView(
     string Id,
