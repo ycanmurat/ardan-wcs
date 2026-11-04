@@ -8,6 +8,7 @@ const MAX_TAXIS = 12;
 const BASE_SIZE = new THREE.Vector3(1.0, 0.14, 1.05);
 const LOAD_SIZE = new THREE.Vector3(0.92, 0.95, 0.98);
 const WHITE = new THREE.Color(0xffffff);
+const TAG_GAP = 3;
 
 export function supported() {
     try {
@@ -64,7 +65,8 @@ class World {
         });
         this.listen();
         this.resize();
-        this.intro();
+        this.preset = "overview";
+        this.rig.fly(this.frame("overview"), 1);
         this.loop = this.loop.bind(this);
         this.raf = requestAnimationFrame(this.loop);
     }
@@ -119,16 +121,17 @@ class World {
         this.host.appendChild(this.overlay);
         for (let level = 0; level < this.site.levels; level++) {
             const anchor = new THREE.Vector3(this.site.rackEnd + 0.9, this.site.y(level) + 0.75, 0.6);
-            this.addTag(`L${level}`, "world-tag is-level", () => anchor);
+            const tag = this.addTag(`L${level}`, "world-tag is-level", () => anchor, () => 0);
+            tag.beside = true;
         }
     }
 
-    addTag(text, className, at) {
+    addTag(text, className, at, rank = () => 1) {
         const el = document.createElement("span");
         el.className = className;
         el.textContent = text;
         this.overlay.appendChild(el);
-        const tag = { el, at };
+        const tag = { el, at, rank, size: null };
         this.tags.add(tag);
         return tag;
     }
@@ -154,20 +157,73 @@ class World {
         this.width = Math.max(1, Math.round(box.width));
         this.height = Math.max(1, Math.round(box.height));
         this.renderer.setSize(this.width, this.height, false);
+        this.rig.maxSize = this.frame("overview").size * 1.25;
+        if (this.introduced && !this.rig.moved && !this.rig.tween) this.view(this.preset, 1);
     }
 
     get aspect() {
         return this.width / this.height;
     }
 
+    // Opens on the whole store, once the panels around the view are on screen.
     intro() {
-        const home = this.rig.homeFor(this.aspect);
-        Object.assign(this.rig, { azimuth: home.azimuth - 0.5, elevation: home.elevation + 0.18, size: home.size * 1.3 });
+        this.introduced = true;
+        this.rig.maxSize = this.frame("overview").size * 1.25;
+        const home = this.frame("overview");
+        Object.assign(this.rig, { azimuth: home.azimuth - 0.3, elevation: home.elevation + 0.1, size: home.size * 1.2 });
         this.rig.target.copy(home.target);
-        this.rig.fly(home, 1400);
+        this.view("overview", 1300);
+    }
+
+    view(name, ms = 750) {
+        this.preset = name;
+        this.rig.fly(this.frame(name), ms);
+        this.rig.moved = false;
+    }
+
+    frame(name) {
+        return this.rig.fit(name, this.viewPoints(name), this.width, this.height, this.insets());
+    }
+
+    viewPoints(name) {
+        const s = this.site;
+        const V = (x, y, z) => new THREE.Vector3(x, y, z);
+        if (name === "rack") {
+            return [V(s.left + 1, 0, s.aisleFront), V(s.rackEnd, 0, s.aisleFront), V(s.left + 1, s.top, -s.laneLength), V(s.rackEnd, s.top, -s.laneLength)];
+        }
+        if (name === "lifts") {
+            const x = Math.max(s.shaftX(s.shafts - 1), s.beltX(true), s.beltX(false)) + 2.5;
+            return [V(s.left, 0, s.front), V(x, 0, s.front), V(s.left, s.top, -s.laneLength), V(x, s.top, -s.laneLength)];
+        }
+        return [V(s.left, 0, s.front + 2.4), V(s.rackEnd, 0, s.front + 2.4), V(s.rackEnd, s.top, -s.laneLength), V(s.left, s.top, s.aisleZ)];
+    }
+
+    // How far the panels around the view reach in from each edge, so the store is framed in the space left free.
+    insets() {
+        const insets = { left: 0, right: 0, top: 0, bottom: 0 };
+        const game = this.host.closest(".game");
+        if (!game) return insets;
+        const host = this.host.getBoundingClientRect();
+        const rect = selector => {
+            const el = game.querySelector(selector);
+            const r = el?.getBoundingClientRect();
+            return r && r.width > 0 && r.height > 0 ? r : null;
+        };
+        const gap = 12;
+        const top = rect(".hud-top");
+        if (top) insets.top = top.bottom - host.top + gap;
+        const bottom = rect(".hud-bottom");
+        if (bottom) insets.bottom = host.bottom - bottom.top + gap;
+        const board = rect(".hud-board");
+        if (board && board.width < host.width * 0.5) insets.left = board.right - host.left + gap;
+        else if (board) insets.bottom = Math.max(insets.bottom, host.bottom - board.top + gap);
+        const rail = rect(".hud-rail");
+        if (rail && rail.width < host.width * 0.3) insets.right = host.right - rail.left + gap;
+        return insets;
     }
 
     update(frame) {
+        if (!this.introduced) this.intro();
         const now = performance.now();
         if (this.lastUpdate) this.interval = this.interval * 0.7 + THREE.MathUtils.clamp(now - this.lastUpdate, 120, 700) * 0.3;
         const first = !this.lastUpdate;
@@ -242,7 +298,8 @@ class World {
         model.group.position.copy(start);
         model.group.userData.pick = { kind: "Lift", id: lift.id };
         const entry = { ...model, glide: new Glide(start) };
-        entry.tag = this.addTag(lift.id, "world-tag is-lift", () => model.group.position.clone().setY(model.group.position.y + 0.95));
+        entry.tag = this.addTag(lift.id, "world-tag is-lift", () => model.group.position.clone().setY(model.group.position.y + 0.95),
+            () => (this.focusSpot === lift.id ? 6 : entry.data?.tone === "crit" ? 5 : 2));
         this.lifts.set(lift.id, entry);
         this.pickables.push(model.group);
         this.scene.add(model.group);
@@ -262,8 +319,14 @@ class World {
             this.track(entry, taxi, now);
             entry.led.material.color.setHex(tones[taxi.tone] ?? tones.neutral);
             const look = `world-tag is-taxi ${taxi.flow ? `flow-${taxi.flow}` : `tone-${taxi.tone}`}`;
-            if (entry.tag.el.className !== look) entry.tag.el.className = look;
-            if (entry.tag.el.textContent !== taxi.label) entry.tag.el.textContent = taxi.label;
+            if (entry.tag.el.className !== look) {
+                entry.tag.el.className = look;
+                entry.tag.size = null;
+            }
+            if (entry.tag.el.textContent !== taxi.label) {
+                entry.tag.el.textContent = taxi.label;
+                entry.tag.size = null;
+            }
         }
     }
 
@@ -276,7 +339,8 @@ class World {
         model.group.userData.pick = { kind: "Taxi", id: taxi.id };
         const entry = { ...model, ghost, glide: new Glide(start), handling: null };
         entry.tag = this.addTag(taxi.id, "world-tag is-taxi", () =>
-            model.group.position.clone().setY(model.group.position.y + (model.carried.visible ? 1.5 : 0.72)));
+            model.group.position.clone().setY(model.group.position.y + (model.carried.visible ? 1.5 : 0.72)),
+            () => (this.focusSpot === taxi.id ? 6 : entry.data?.tone === "crit" ? 5 : entry.data?.flow ? 3 : 1));
         this.taxis.set(taxi.id, entry);
         this.pickables.push(model.group);
         this.scene.add(model.group, ghost);
@@ -358,7 +422,7 @@ class World {
                 el.textContent = "!";
                 el.addEventListener("click", () => this.pick("Alarm", marker.alarm));
                 this.overlay.appendChild(el);
-                alert = { el, spot: marker.spot, key: "" };
+                alert = { el, spot: marker.spot, key: "", size: null, rank: () => 9, fixed: true };
                 alert.at = () => this.spotPosition(alert.spot, 1.0);
                 this.tags.add(alert);
                 this.alerts.set(marker.alarm, alert);
@@ -386,8 +450,6 @@ class World {
             if (this.lastEvent !== null) {
                 for (const event of events.filter(e => e.seq > this.lastEvent).reverse()) {
                     if (event.kind === "Dispatched") dispatched.push(event.spot);
-                    const where = this.spotPosition(event.spot, 0.6);
-                    if (where && event.points !== 0) this.popup(where, event.points);
                 }
             }
             this.lastEvent = Math.max(this.lastEvent ?? newest, newest);
@@ -409,16 +471,6 @@ class World {
                 this.removeParcel(parcel);
             }
         }
-    }
-
-    popup(where, points) {
-        const el = document.createElement("span");
-        el.className = `world-pop ${points > 0 ? "is-gain" : "is-loss"}`;
-        el.textContent = points > 0 ? `+${points}` : `−${Math.abs(points)}`;
-        this.overlay.appendChild(el);
-        const tag = { el, at: () => where };
-        this.tags.add(tag);
-        setTimeout(() => this.removeTag(tag), 1700);
     }
 
     spotPosition(spot, raise = 0) {
@@ -448,23 +500,35 @@ class World {
         const where = this.spotPosition(spot);
         if (!where) return;
         const goal = this.rig.goal();
-        this.rig.fly({ target: new THREE.Vector3(where.x, Math.max(1.5, where.y - 0.8), where.z + 1.5), size: Math.min(goal.size, 20) });
+        const toward = this.rig.direction(goal.azimuth, goal.elevation);
+        const target = where.clone().addScaledVector(toward, (goal.target.y - where.y) / toward.y);
+        this.rig.fly({ target, size: Math.min(goal.size, 18) });
+        this.rig.moved = true;
     }
 
     command(name) {
-        const goal = this.rig.goal();
         switch (name) {
-            case "rotate-left": this.rig.fly({ azimuth: goal.azimuth - Math.PI / 4 }, 450); break;
-            case "rotate-right": this.rig.fly({ azimuth: goal.azimuth + Math.PI / 4 }, 450); break;
-            case "zoom-in": this.rig.fly({ size: goal.size / 1.35 }, 280); break;
-            case "zoom-out": this.rig.fly({ size: goal.size * 1.35 }, 280); break;
-            case "home": this.rig.fly(this.rig.homeFor(this.aspect), 700); break;
+            case "overview":
+            case "rack":
+            case "lifts":
+                this.view(name);
+                break;
+            case "zoom-in": this.zoomBy(1 / 1.35); break;
+            case "zoom-out": this.zoomBy(1.35); break;
+            case "lock": this.controls.locked = true; break;
+            case "unlock": this.controls.locked = false; break;
             case "fullscreen": this.setImmersive(!this.immersive); break;
         }
     }
 
+    zoomBy(factor) {
+        const want = this.rig.want();
+        want.size = this.rig.limit(want.size * factor);
+    }
+
     labels(show) {
         this.overlay.classList.toggle("is-quiet", !show);
+        for (const tag of this.tags) tag.size = null;
     }
 
     setImmersive(on, notify = true) {
@@ -476,25 +540,25 @@ class World {
         if (notify) this.dotnet.invokeMethodAsync("Immersive", on).catch(() => {});
     }
 
+    // Zooms about the point under the pointer, so that point stays where it is on screen.
     zoomAt(clientX, clientY, factor) {
-        const before = this.groundAt(clientX, clientY);
-        this.rig.zoomTo(this.rig.size * factor);
-        this.rig.apply(this.aspect);
-        const after = this.groundAt(clientX, clientY);
-        if (!before || !after) return;
-        this.rig.target.add(before.sub(after));
-        this.rig.clamp();
+        const want = this.rig.want();
+        const size = this.rig.limit(want.size * factor);
+        if (Math.abs(size - want.size) < 1e-6) return;
+        this.aim(clientX, clientY, this.rig.aimed(this.aspect));
+        const point = this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -want.target.y), new THREE.Vector3());
+        if (point) {
+            const offset = want.target.clone().sub(point).multiplyScalar(size / want.size);
+            want.target.copy(point).add(offset);
+        }
+        want.size = size;
+        this.rig.clamp(want.target);
     }
 
-    groundAt(clientX, clientY) {
-        this.aim(clientX, clientY);
-        return this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.rig.target.y), new THREE.Vector3());
-    }
-
-    aim(clientX, clientY) {
+    aim(clientX, clientY, camera = this.camera) {
         const box = this.canvas.getBoundingClientRect();
         this.pointer.set(((clientX - box.left) / box.width) * 2 - 1, -((clientY - box.top) / box.height) * 2 + 1);
-        this.ray.setFromCamera(this.pointer, this.camera);
+        this.ray.setFromCamera(this.pointer, camera);
     }
 
     pickAt(clientX, clientY) {
@@ -735,19 +799,33 @@ class World {
         this.routes.draw(this.routeList(), time);
     }
 
+    // Places every label on whole pixels, most important first. A label that would cover a more important one waits until there is room.
     placeTags() {
         const w = this.width;
         const h = this.height;
+        const shown = [];
         for (const tag of this.tags) {
             const at = tag.at();
-            if (!at) {
-                tag.el.style.visibility = "hidden";
+            const p = at ? this.projected.copy(at).project(this.camera) : null;
+            if (!p || p.x < -1.1 || p.x > 1.1 || p.y < -1.1 || p.y > 1.1) {
+                show(tag, false);
                 continue;
             }
-            const p = this.projected.copy(at).project(this.camera);
-            const inside = p.x > -1.1 && p.x < 1.1 && p.y > -1.1 && p.y < 1.1;
-            tag.el.style.visibility = inside ? "" : "hidden";
-            if (inside) tag.el.style.transform = `translate3d(${((p.x + 1) / 2 * w).toFixed(1)}px, ${((1 - p.y) / 2 * h).toFixed(1)}px, 0)`;
+            shown.push({ tag, x: Math.round((p.x + 1) / 2 * w), y: Math.round((1 - p.y) / 2 * h), rank: tag.rank() });
+        }
+        shown.sort((a, b) => b.rank - a.rank);
+        const taken = [];
+        for (const { tag, x, y } of shown) {
+            const size = tag.size ??= { w: tag.el.offsetWidth, h: tag.el.offsetHeight };
+            const box = tag.beside
+                ? { l: x, r: x + size.w, t: y - size.h / 2, b: y + size.h / 2 }
+                : { l: x - size.w / 2, r: x + size.w / 2, t: y - size.h, b: y };
+            const free = tag.fixed || !taken.some(o => box.l < o.r + TAG_GAP && box.r > o.l - TAG_GAP && box.t < o.b + TAG_GAP && box.b > o.t - TAG_GAP);
+            show(tag, free);
+            if (!free) continue;
+            taken.push(box);
+            const move = `translate3d(${x}px, ${y}px, 0)`;
+            if (tag.move !== move) tag.el.style.transform = tag.move = move;
         }
     }
 
@@ -757,12 +835,14 @@ class World {
         const ms = time - (this.last ?? time);
         this.last = time;
         this.pace(ms);
-        this.rig.step(time);
+        const seconds = Math.min(0.1, ms / 1000);
+        const moving = this.rig.step(time, seconds);
         this.rig.apply(this.aspect);
-        this.animate(time, Math.min(0.1, ms / 1000));
+        this.animate(time, seconds);
         this.placeMarkers(time);
         this.placeTags();
         this.renderer.render(this.scene, this.camera);
+        if (moving && this.hoverPoint) this.hoverAt(this.hoverPoint.x, this.hoverPoint.y);
     }
 
     pace(ms) {
@@ -815,6 +895,12 @@ class World {
         this.renderer.forceContextLoss();
         this.host.replaceChildren();
     }
+}
+
+function show(tag, visible) {
+    if (tag.visible === visible) return;
+    tag.visible = visible;
+    tag.el.style.visibility = visible ? "" : "hidden";
 }
 
 function lines(text) {

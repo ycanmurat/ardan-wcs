@@ -1,0 +1,32 @@
+<div class="hud-panel hud-view" role="toolbar" aria-label="Camera">
+    @foreach (var (command, label, hint) in Views)
+    {
+        <Tip Text="@hint" Side="top">
+            <button type="button" class="hud-view-btn" @onclick="() => OnCommand.InvokeAsync(command)">@label</button>
+        </Tip>
+    }
+    <span class="hud-view-split" aria-hidden="true"></span>
+    <Tip Text="Zoom out · −" Side="top">
+        <button type="button" class="hud-tool" aria-label="Zoom out" @onclick='() => OnCommand.InvokeAsync("zoom-out")'><Icon Name="minus" /></button>
+    </Tip>
+    <Tip Text="Zoom in · +" Side="top">
+        <button type="button" class="hud-tool" aria-label="Zoom in" @onclick='() => OnCommand.InvokeAsync("zoom-in")'><Icon Name="plus" /></button>
+    </Tip>
+    <Tip Text="@(Locked ? "Camera locked. Click to let the mouse move it again." : "Lock the camera so dragging and scrolling leave it where it is.")" Side="top">
+        <button type="button" class="hud-tool @(Locked ? "is-active" : null)" aria-pressed="@(Locked ? "true" : "false")" aria-label="Lock the camera"
+                @onclick="() => LockedChanged.InvokeAsync(!Locked)"><Icon Name="@(Locked ? "lock" : "unlock")" /></button>
+    </Tip>
+</div>
+
+@code {
+    private static readonly (string Command, string Label, string Hint)[] Views =
+    [
+        ("overview", "Overview", "The whole store · 1"),
+        ("rack", "Rack", "The rack face and the aisles · 2"),
+        ("lifts", "Lifts", "VTUs, conveyors and the reject area · 3"),
+    ];
+
+    [Parameter] public bool Locked { get; set; }
+    [Parameter] public EventCallback<bool> LockedChanged { get; set; }
+    [Parameter] public EventCallback<string> OnCommand { get; set; }
+}

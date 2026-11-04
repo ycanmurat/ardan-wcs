@@ -38,7 +38,7 @@ with a sentence the screen shows as it is. Read models in `Contracts` are immuta
 
 `ShiftScore` watches the store and never changes it. The model tells it when a pallet is stored or dispatched
 and when an order completes; `AlarmBoard.Closed` tells it who closed an alarm (the operator, remote support or the supervisor).
-It keeps the points, the level, a star rating from the last 20 completed orders, five goals with tiers and the latest score events.
+It keeps the points, a star rating from the last 20 completed orders, five goals with tiers and the latest score events.
 Orders that were already late when the shift started (open orders reloaded after a restart) are not rated.
 Each event names its spot (a lane such as `L2·B05`, `Dock 2`, a machine id or `Infeed`), so the 3D view can show the points where they were earned.
 
@@ -103,15 +103,18 @@ Commands answer `200` with the result sentence, or `409` with the reason they we
 - `WcsApi` is a typed `HttpClient` for lists and commands. Command results become toasts.
 - The live view is a 3D scene in `wwwroot/js/world.js`, an ES module on three.js r170 loaded from jsDelivr, with its parts in
   `js/world/`: `site.js` (sizes, colours, themes), `scene.js` (the building, rack, conveyors and docks), `camera.js`
-  (the camera rig and mouse, touch and keyboard controls, kept inside fixed zoom and position limits) and `flow.js`
+  (three fixed camera angles, drag to move and zoom towards the pointer with smoothing, zoom and position limits, and a lock)
+  and `flow.js`
   (the moving arrows that show where each Taxi is heading, green into store and blue out of store).
   `WorldView` imports it once, sends the fixed site shape, then pushes a `WorldFrame` on every snapshot: Taxis with their
   job's from and to places, VTUs, conveyors, the lanes that changed, alarm markers and new score events. Texts and tones are
   worked out in C#, so the module only places things. Machines glide between frames over the measured snapshot interval;
   a Taxi visibly reaches into the lane while it picks up or sets down. Clicks come back through `[JSInvokable] Pick`.
   Without WebGL, or if the module cannot load, the page falls back to the 2D rack view.
-- The HUD around the scene is ordinary Blazor: `HudTop` (score, clock, rating), `HudBoard` (jobs, offers, goals),
-  `HudRail` (resources and view tools), `HudAlerts` and `Inspector`. Machine and alarm commands come from `OperatorCommands`,
+- The HUD around the scene is ordinary Blazor: `HudTop` (status, clock, speed, score, rating), `HudBoard` (orders, suggestions,
+  goals), `HudRail` (lane colours, labels, 2D, focus mode), `HudView` (camera views, zoom, lock), `HudLegend`, `HudAlerts`
+  and `Inspector`. The camera frames each view in the space the panels leave free, and labels are laid out every frame on
+  whole pixels, most important first, so they never shake or pile up. Machine and alarm commands come from `OperatorCommands`,
   which the Fleet, Orders and Alarms pages share, so a command asks the same question wherever it starts.
 - Overview and Fleet are built from shared parts: `TaxiCard`, `LiftCard` and `BeltCard` in `Components/Machines`,
   `Gauge`, `LevelMeter`, `Sparkline` and `StatTile` in `Components/Ui`, and `OfferCard` and `GoalRow`, which the live view's

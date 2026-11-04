@@ -125,10 +125,6 @@ public sealed record GoalView(GoalKind Kind, string Title, int Tier, double Prog
 public sealed record ShiftView(
     DateTimeOffset StartedAt,
     int Points,
-    int Earned,
-    int Level,
-    int LevelFrom,
-    int LevelTo,
     double Stars,
     int OrdersRated,
     int OrdersOnTime,

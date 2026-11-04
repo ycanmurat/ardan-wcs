@@ -1,17 +1,4 @@
-<aside class="hud-rail" aria-label="Store and view">
-    <section class="hud-panel hud-stock" aria-label="Store">
-        @foreach (var item in Resources)
-        {
-            <Tip Title="@item.Title" Text="@item.Help" Side="left">
-                <span class="hud-res tone-@item.Tone">
-                    <Icon Name="@item.Icon" Size="16" />
-                    <span class="hud-res-value"><strong>@item.Value</strong><small>@item.Of</small></span>
-                    <i class="hud-res-bar" style="--share: @Display.Num(item.Share * 100, "0.#")%"></i>
-                </span>
-            </Tip>
-        }
-    </section>
-
+<aside class="hud-rail" aria-label="View">
     <section class="hud-panel hud-tools" aria-label="View">
         <Tip Text="Colour lanes and find a product" Side="left">
             <button type="button" class="hud-tool @(_lens ? "is-active" : null)" aria-pressed="@(_lens ? "true" : "false")" aria-label="Colour lanes and find a product"
@@ -19,12 +6,6 @@
         </Tip>
         @if (!Flat)
         {
-            @foreach (var tool in CameraTools)
-            {
-                <Tip Text="@tool.Hint" Side="left" Class="@(tool.Command.StartsWith("zoom", StringComparison.Ordinal) ? "is-zoom" : null)">
-                    <button type="button" class="hud-tool" aria-label="@tool.Hint" @onclick="() => OnCommand.InvokeAsync(tool.Command)"><Icon Name="@tool.Icon" /></button>
-                </Tip>
-            }
             <Tip Text="@(Labels ? "Hide machine labels" : "Show machine labels")" Side="left">
                 <button type="button" class="hud-tool @(Labels ? "is-active" : null)" aria-pressed="@(Labels ? "true" : "false")" aria-label="Machine labels"
                         @onclick="() => LabelsChanged.InvokeAsync(!Labels)"><Icon Name="tag" /></button>
@@ -85,20 +66,8 @@
         new(nameof(LaneColour.Expiry), "Expiry", "Days left before the best-before date."),
     ];
 
-    private static readonly IReadOnlyList<(string Command, string Icon, string Hint)> CameraTools =
-    [
-        ("rotate-left", "rotate-left", "Turn left · Q"),
-        ("rotate-right", "rotate-right", "Turn right · E"),
-        ("zoom-in", "plus", "Zoom in · +"),
-        ("zoom-out", "minus", "Zoom out · −"),
-        ("home", "home", "Back to the whole store · 0"),
-    ];
-
     private bool _lens;
 
-    private sealed record Resource(string Title, string Help, string Icon, string Value, string Of, double Share, string Tone);
-
-    [Parameter, EditorRequired] public LiveSnapshot Live { get; set; } = default!;
     [Parameter] public bool Flat { get; set; }
     [Parameter] public EventCallback<bool> FlatChanged { get; set; }
     [Parameter] public bool Labels { get; set; }
@@ -112,31 +81,6 @@
     [Parameter] public EventCallback<string> OnCommand { get; set; }
 
     private SkuView? Found => Product is null ? null : Skus.FirstOrDefault(sku => sku.Code == Product);
-
-    private IEnumerable<Resource> Resources
-    {
-        get
-        {
-            var k = Live.Kpis;
-            var taxisReady = Live.Taxis.Count(taxi => taxi.InService && taxi.FaultCode is null);
-            var liftsReady = Live.Lifts.Count(lift => lift.FaultCode is null);
-            var beltsRunning = Live.Conveyors.Count(belt => belt.State == ConveyorState.Running);
-            var moved = k.InLastHour + k.OutLastHour;
-            return
-            [
-                new("Storage", $"{Display.Count(k.Stored)} pallets in store out of {Display.Count(k.Capacity)} places.",
-                    "pallet", Display.Count(k.Stored), $"/{Display.Count(k.Capacity)}", k.Occupancy, k.Occupancy > 0.9 ? "warn" : "brand"),
-                new("Taxis ready", "Taxis in service without a fault. Click a Taxi in the view to charge, park or reset it.",
-                    "taxi", taxisReady.ToString(), $"/{Live.Taxis.Count}", Share(taxisReady, Live.Taxis.Count), taxisReady < Live.Taxis.Count ? "warn" : "ok"),
-                new("VTUs ready", "Vertical lifts without a fault. A stopped VTU makes Taxis wait at the dock.",
-                    "lift", liftsReady.ToString(), $"/{Live.Lifts.Count}", Share(liftsReady, Live.Lifts.Count), liftsReady < Live.Lifts.Count ? "crit" : "ok"),
-                new("Conveyors running", "Infeed and outfeed. A jammed outfeed stops dispatch until it is reset.",
-                    "conveyor", beltsRunning.ToString(), $"/{Live.Conveyors.Count}", Share(beltsRunning, Live.Conveyors.Count), beltsRunning < Live.Conveyors.Count ? "crit" : "ok"),
-                new("Moved in 1 hour", $"{k.InLastHour} stored and {k.OutLastHour} sent to the docks in the last 60 minutes.",
-                    "route", moved.ToString(), "/h", Math.Min(1, moved / 120.0), "info"),
-            ];
-        }
-    }
 
     private static readonly (string Swatch, string Text)[] Busy = [("lane-busy", "Taxi on its way")];
 
@@ -169,8 +113,6 @@
             ("pip tone-soon", "Expires within 3 days"),
         ],
     };
-
-    private static double Share(int part, int whole) => whole == 0 ? 0 : (double)part / whole;
 
     private Task SetColourAsync(string value) => ColourChanged.InvokeAsync(Enum.Parse<LaneColour>(value));
 

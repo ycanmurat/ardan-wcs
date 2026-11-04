@@ -28,6 +28,7 @@
         <NavItem Href="orders" Icon="orders" Label="Orders" Count="@(Live?.Orders.Open ?? 0)" />
         <NavItem Href="inventory" Icon="inventory" Label="Inventory" />
         <NavItem Href="alarms" Icon="alarm" Label="Alarms" Count="@(Live?.ActiveAlarms.Count ?? 0)" Tone="@AlarmTone" />
+        <NavItem Href="guide" Icon="book" Label="Guide" />
         <span class="nav-heading">Next phase</span>
         <NavItem Href="insights" Icon="insights" Label="Insights" Tag="Planned" />
         <span class="nav-heading">Code</span>

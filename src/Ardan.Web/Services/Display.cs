@@ -145,7 +145,6 @@ public static class Display
 
     public static string Points(ScoreEvent item) => item switch
     {
-        { Kind: ScoreKind.Level } => "Lv",
         { Points: > 0 } => $"+{item.Points}",
         { Points: < 0 } => $"−{-item.Points}",
         _ => "·",
@@ -153,25 +152,10 @@ public static class Display
 
     public static string ScoreClass(ScoreEvent item) => item switch
     {
-        { Kind: ScoreKind.Goal or ScoreKind.Level } => "is-big",
+        { Kind: ScoreKind.Goal } => "is-big",
         { Points: < 0 } => "is-loss",
         _ => "is-gain",
     };
-
-    public static double LevelShare(ShiftView shift) => shift.LevelTo == shift.LevelFrom
-        ? 0
-        : Math.Clamp((double)(shift.Earned - shift.LevelFrom) / (shift.LevelTo - shift.LevelFrom), 0, 1);
-
-    public static string? Rate(ShiftView shift, DateTimeOffset now)
-    {
-        var hours = (now - shift.StartedAt).TotalHours;
-        if (hours < 1.0 / 6) return null;
-        var rate = (int)Math.Round(shift.Points / hours);
-        return $"{(rate >= 0 ? "+" : "−")}{Count(Math.Abs(rate))}/h";
-    }
-
-    public static string LevelHelp(ShiftView shift) =>
-        $"{Count(shift.LevelTo - shift.Earned)} more points to level {shift.Level + 1}. Penalties lower the score, never the level.";
 
     public static string RatingHelp(ShiftView shift) => shift.OrdersRated == 0
         ? "Five stars until the first order finishes. Then it follows how many of the last 20 orders finished on time."

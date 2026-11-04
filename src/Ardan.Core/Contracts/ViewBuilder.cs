@@ -75,10 +75,6 @@ public static class ViewBuilder
     public static ShiftView Shift(ShiftScore score) => new(
         score.StartedAt,
         score.Points,
-        score.Earned,
-        score.Level,
-        score.LevelFrom,
-        score.LevelTo,
         score.Stars,
         score.OrdersRated,
         score.OrdersOnTime,

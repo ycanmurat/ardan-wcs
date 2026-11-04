@@ -6,7 +6,7 @@ using Ardan.Core.Orders;
 namespace Ardan.Core.Engine;
 
 [JsonConverter(typeof(JsonStringEnumConverter<ScoreKind>))]
-public enum ScoreKind { Stored, Dispatched, Order, Fix, Penalty, Goal, Level }
+public enum ScoreKind { Stored, Dispatched, Order, Fix, Penalty, Goal }
 
 [JsonConverter(typeof(JsonStringEnumConverter<GoalKind>))]
 public enum GoalKind { Store, Dispatch, OnTime, Fix, Uptime }
@@ -63,25 +63,20 @@ public sealed class Goal(GoalKind kind, double firstTarget, int firstReward)
 }
 
 /// <summary>
-/// The shift as a game: points for work done, a service rating from on-time orders, levels and goals.
+/// The shift as a game: points for work done, a service rating from on-time orders and goals.
 /// It only watches the store; nothing here changes how the store runs.
 /// </summary>
 public sealed class ShiftScore(DateTimeOffset startedAt)
 {
     private const int EventsKept = 40;
     private const int RatedOrders = 20;
-    private const int LevelStep = 250;
     private readonly LinkedList<ScoreEvent> _events = new();
     private readonly Queue<bool> _rated = new();
     private long _seq;
 
     public DateTimeOffset StartedAt { get; } = startedAt;
     public int Points { get; private set; }
-    public int Earned { get; private set; }
     public int GoalsDone { get; private set; }
-    public int Level => LevelFor(Earned);
-    public int LevelFrom => PointsFor(Level);
-    public int LevelTo => PointsFor(Level + 1);
     public int OrdersRated => _rated.Count;
     public int OrdersOnTime => _rated.Count(onTime => onTime);
 
@@ -99,15 +94,6 @@ public sealed class ShiftScore(DateTimeOffset startedAt)
         _rated.Count == 0 ? 5 : Math.Clamp(Math.Round(((double)OrdersOnTime / _rated.Count - 0.5) * 20) / 2, 0, 5);
 
     public IEnumerable<ScoreEvent> Latest(int count) => _events.Take(count);
-
-    public static int PointsFor(int level) => LevelStep * (level - 1) * level / 2;
-
-    public static int LevelFor(int earned)
-    {
-        var level = 1;
-        while (PointsFor(level + 1) <= earned) level++;
-        return level;
-    }
 
     internal void Stored(DateTimeOffset now, string palletId, LaneId lane)
     {
@@ -181,15 +167,7 @@ public sealed class ShiftScore(DateTimeOffset startedAt)
 
     private void Add(DateTimeOffset now, ScoreKind kind, int points, string text, string? spot)
     {
-        var level = Level;
         Points += points;
-        if (points > 0) Earned += points;
-        Record(now, kind, points, text, spot);
-        if (Level > level) Record(now, ScoreKind.Level, 0, $"Level {Level} reached", null);
-    }
-
-    private void Record(DateTimeOffset now, ScoreKind kind, int points, string text, string? spot)
-    {
         _events.AddFirst(new ScoreEvent(++_seq, now, kind, points, text, spot));
         if (_events.Count > EventsKept) _events.RemoveLast();
     }

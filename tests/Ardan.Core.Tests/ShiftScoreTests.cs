@@ -137,30 +137,4 @@ public class ShiftScoreTests
 
         Assert.Equal(2, uptime.Tier);
     }
-
-    [Fact]
-    public void Earning_points_raises_the_level()
-    {
-        var store = TestStore.Create(taxis: 6);
-
-        foreach (var taxi in store.Taxis)
-        {
-            store.StopTaxi(taxi);
-            store.ResetTaxi(taxi.Id);
-        }
-
-        Assert.True(store.Score.Earned >= ShiftScore.PointsFor(2));
-        Assert.Equal(2, store.Score.Level);
-        Assert.Contains(store.Score.Latest(20), e => e.Kind == ScoreKind.Level && e.Text == "Level 2 reached");
-    }
-
-    [Theory]
-    [InlineData(0, 1)]
-    [InlineData(249, 1)]
-    [InlineData(250, 2)]
-    [InlineData(749, 2)]
-    [InlineData(750, 3)]
-    [InlineData(2500, 5)]
-    public void Each_level_needs_more_points_than_the_last(int earned, int level) =>
-        Assert.Equal(level, ShiftScore.LevelFor(earned));
 }

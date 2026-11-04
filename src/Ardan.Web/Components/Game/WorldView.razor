@@ -4,7 +4,7 @@
 @inject ILogger<WorldView> Logger
 
 <div class="world" @ref="_host" role="img"
-     aria-label="3D view of the store. Drag to turn, right-drag to move, scroll or pinch to zoom. Click a Taxi, VTU, conveyor or lane to see it in the side panel."></div>
+     aria-label="3D view of the store. Drag to move, scroll or pinch to zoom, press 1, 2 or 3 for a fixed view. Click a Taxi, VTU, conveyor or lane to see it in the side panel."></div>
 
 @code {
     private const string ModulePath = "./js/world.js";
@@ -16,6 +16,7 @@
     private (LaneColour, string?, DateOnly, int)? _look;
     private string? _highlight;
     private bool? _labels;
+    private bool? _locked;
     private bool _starting;
     private bool _closed;
 
@@ -24,6 +25,7 @@
     [Parameter] public string? Highlight { get; set; }
     [Parameter] public IReadOnlyDictionary<string, Velocity>? Velocities { get; set; }
     [Parameter] public bool Labels { get; set; } = true;
+    [Parameter] public bool Locked { get; set; }
     [Parameter] public EventCallback<Selection?> OnPick { get; set; }
     [Parameter] public EventCallback<bool> OnImmersive { get; set; }
     [Parameter] public EventCallback OnUnavailable { get; set; }
@@ -56,6 +58,11 @@
             _labels = Labels;
             await CallAsync("labels", Labels);
         }
+        if (_locked != Locked)
+        {
+            _locked = Locked;
+            await CallAsync("command", Locked ? "lock" : "unlock");
+        }
         if (_highlight != Highlight || _look != Look) await PushAsync();
     }
 
@@ -81,7 +88,9 @@
             _sent.Clear();
             _look = null;
             _labels = Labels;
+            _locked = Locked;
             await CallAsync("labels", Labels);
+            await CallAsync("command", Locked ? "lock" : "unlock");
             await PushAsync();
         }
         catch (JSException exception)

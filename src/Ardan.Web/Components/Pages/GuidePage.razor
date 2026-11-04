@@ -1,0 +1,335 @@
+@page "/guide"
+
+<PageTitle>Guide · Ardán</PageTitle>
+
+<PageHeader Title="Guide" Subtitle="What you are looking at, what each part does and how to work with it. About five minutes from start to finish.">
+    <a class="btn btn-primary" href="live"><Icon Name="live" Size="16" />Open the live view</a>
+</PageHeader>
+
+<div class="guide">
+    <nav class="guide-toc" aria-label="On this page">
+        <span class="guide-toc-title">On this page</span>
+        @foreach (var (id, title) in Sections)
+        {
+            <a href="@($"guide#{id}")">@title</a>
+        }
+    </nav>
+
+    <div class="guide-body">
+        <section id="start" class="card guide-section">
+            <h2>Start here</h2>
+            <p class="guide-lead">
+                Ardán runs an automated, chilled pallet store. Pallets arrive from suppliers, are stored in a six-level rack and leave
+                for the docks when an order needs them. Machines do the moving; you watch, decide and step in when something needs a person.
+            </p>
+            <ol class="guide-steps">
+                <li>
+                    <span class="guide-step">1</span>
+                    <div>
+                        <strong>Look at the store</strong>
+                        <p>Overview sums up the shift. The live view shows every machine moving in 3D.</p>
+                        <a class="link" href="live">Open the live view <Icon Name="chevron-right" Size="14" /></a>
+                    </div>
+                </li>
+                <li>
+                    <span class="guide-step">2</span>
+                    <div>
+                        <strong>Click anything</strong>
+                        <p>A Taxi, a VTU, a conveyor or a lane opens on the right with what it is doing and what you can do.</p>
+                    </div>
+                </li>
+                <li>
+                    <span class="guide-step">3</span>
+                    <div>
+                        <strong>Fix what turns red</strong>
+                        <p>A red ! marks a stop. The alert at the bottom right has the fix button; Alarms has every step.</p>
+                        <a class="link" href="alarms">Open Alarms <Icon Name="chevron-right" Size="14" /></a>
+                    </div>
+                </li>
+            </ol>
+            <p class="hint">This is a demo with made-up data. Everyone who opens it shares the same store, so every button is safe to try.</p>
+        </section>
+
+        <section id="store" class="card guide-section">
+            <h2>The store and its machines</h2>
+            <div class="guide-grid">
+                @foreach (var part in Parts)
+                {
+                    <article class="guide-part">
+                        <span class="guide-part-icon tone-@part.Tone"><Icon Name="@part.Icon" Size="20" /></span>
+                        <strong>@part.Name</strong>
+                        <p>@part.Text</p>
+                    </article>
+                }
+            </div>
+        </section>
+
+        <section id="flow" class="card guide-section">
+            <h2>How a pallet moves</h2>
+            <h3 class="guide-flow-title"><i class="swatch flow-in"></i>Into store</h3>
+            <div class="flow guide-flow">
+                @for (var i = 0; i < Inbound.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        <span class="flow-arrow" aria-hidden="true"><Icon Name="arrow-right" /></span>
+                    }
+                    <div class="flow-node"><Icon Name="@Inbound[i].Icon" /><strong>@Inbound[i].Name</strong><span>@Inbound[i].Text</span></div>
+                }
+            </div>
+            <h3 class="guide-flow-title"><i class="swatch flow-out"></i>Out of store</h3>
+            <div class="flow guide-flow">
+                @for (var i = 0; i < Outbound.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        <span class="flow-arrow" aria-hidden="true"><Icon Name="arrow-right" /></span>
+                    }
+                    <div class="flow-node"><Icon Name="@Outbound[i].Icon" /><strong>@Outbound[i].Name</strong><span>@Outbound[i].Text</span></div>
+                }
+            </div>
+            <p class="hint">One Taxi works an aisle at a time. A Taxi that needs another level waits at the dock for the first free VTU.</p>
+        </section>
+
+        <section id="live" class="card guide-section">
+            <h2>Reading the live view</h2>
+            <div class="guide-split">
+                <div>
+                    <h3>In the 3D store</h3>
+                    <dl class="guide-legend">
+                        <div><dt><span class="guide-tag is-in">T-01 ↓ L1·B04</span></dt><dd>Taxi T-01 is taking a pallet into store. It is heading for level 1, bay 4.</dd></div>
+                        <div><dt><span class="guide-tag is-out">T-03 ↑ Outfeed</span></dt><dd>Taxi T-03 is taking a pallet out of store, to the outfeed and the docks.</dd></div>
+                        <div><dt><span class="guide-tag">T-05 ⚡</span></dt><dd>Charging at the dock. A label with just the name means the Taxi is free.</dd></div>
+                        <div><dt><span class="guide-alert">!</span></dt><dd>A machine has stopped or needs a decision. Point at it to see why; click it for the steps.</dd></div>
+                        <div><dt><span class="guide-arrows"><i></i><i></i><i></i></span></dt><dd>Moving arrows show a Taxi's route. A frame marks the lane or conveyor it is going to.</dd></div>
+                        <div><dt><span class="guide-pallets"><i class="is-plain"></i><i class="is-amber"></i></span></dt><dd>Pallets in their lanes. Amber means best before within three days. The layers button colours lanes by speed or expiry instead.</dd></div>
+                    </dl>
+                </div>
+                <div>
+                    <h3>Around it</h3>
+                    <dl class="guide-legend">
+                        @foreach (var (name, text) in Panels)
+                        {
+                            <div><dt><span class="guide-place">@name</span></dt><dd>@text</dd></div>
+                        }
+                    </dl>
+                </div>
+            </div>
+        </section>
+
+        <section id="controls" class="card guide-section">
+            <h2>Controls</h2>
+            <div class="guide-split">
+                <div>
+                    <h3><Icon Name="mouse" Size="16" />Mouse and touch</h3>
+                    <dl class="guide-keys">
+                        @foreach (var (key, text) in Pointer)
+                        {
+                            <div><dt>@key</dt><dd>@text</dd></div>
+                        }
+                    </dl>
+                </div>
+                <div>
+                    <h3><Icon Name="keyboard" Size="16" />Keyboard</h3>
+                    <dl class="guide-keys">
+                        @foreach (var (keys, text) in Keys)
+                        {
+                            <div>
+                                <dt>
+                                    @foreach (var key in keys)
+                                    {
+                                        <kbd>@key</kbd>
+                                    }
+                                </dt>
+                                <dd>@text</dd>
+                            </div>
+                        }
+                    </dl>
+                </div>
+            </div>
+            <p class="hint">The camera keeps a fixed angle so the store never turns upside down. Lock it before a demo and the mouse can only click.</p>
+        </section>
+
+        <section id="actions" class="card guide-section">
+            <h2>Taking action</h2>
+            <p>Every action asks for confirmation and says what will happen before anything moves.</p>
+            <div class="guide-grid">
+                @foreach (var action in Actions)
+                {
+                    <article class="guide-part">
+                        <span class="guide-part-icon tone-@action.Tone"><Icon Name="@action.Icon" Size="20" /></span>
+                        <strong>@action.Name</strong>
+                        <p>@action.Text</p>
+                    </article>
+                }
+            </div>
+        </section>
+
+        <section id="score" class="card guide-section">
+            <h2>The shift score</h2>
+            <p>
+                A light layer of game on top of real work: points for what the shift gets done, stars for keeping customers' orders on time
+                and goals to aim for. It only watches. Nothing about the score changes how the store runs.
+            </p>
+            <div class="guide-split">
+                <dl class="guide-points">
+                    @foreach (var (what, points) in Points)
+                    {
+                        <div><dt>@what</dt><dd class="@(points.StartsWith('−') ? "is-loss" : "is-gain")">@points</dd></div>
+                    }
+                </dl>
+                <dl class="guide-legend">
+                    <div><dt><span class="guide-place">Stars</span></dt><dd>How many of the last 20 orders finished on time, from 0 to 5 in half stars.</dd></div>
+                    <div><dt><span class="guide-place">Goals</span></dt><dd>Store, send, finish on time, fix stops, run without a stop. Each pays its reward and comes back a little harder.</dd></div>
+                    <div><dt><span class="guide-place">Suggestions</span></dt><dd>Work worth doing now, such as rushing an order that is nearly due. Nothing changes until you accept one.</dd></div>
+                </dl>
+            </div>
+        </section>
+
+        <section id="pages" class="card guide-section">
+            <h2>Every page</h2>
+            <div class="guide-pages">
+                @foreach (var link in Pages)
+                {
+                    <a class="guide-page" href="@link.Href">
+                        <span class="guide-part-icon tone-brand"><Icon Name="@link.Icon" Size="18" /></span>
+                        <span><strong>@link.Name</strong><small>@link.Text</small></span>
+                        <Icon Name="chevron-right" Size="16" Class="guide-go" />
+                    </a>
+                }
+            </div>
+        </section>
+
+        <section id="words" class="card guide-section">
+            <h2>Words used here</h2>
+            <dl class="guide-words">
+                @foreach (var (word, meaning) in Words)
+                {
+                    <div><dt>@word</dt><dd>@meaning</dd></div>
+                }
+            </dl>
+        </section>
+    </div>
+</div>
+
+@code {
+    private sealed record Item(string Icon, string Name, string Text, string Tone = "brand");
+
+    private sealed record PageLink(string Href, string Icon, string Name, string Text);
+
+    private static readonly (string Id, string Title)[] Sections =
+    [
+        ("start", "Start here"),
+        ("store", "The store and its machines"),
+        ("flow", "How a pallet moves"),
+        ("live", "Reading the live view"),
+        ("controls", "Controls"),
+        ("actions", "Taking action"),
+        ("score", "The shift score"),
+        ("pages", "Every page"),
+        ("words", "Words used here"),
+    ];
+
+    private static readonly Item[] Parts =
+    [
+        new("taxi", "Taxi", "A battery pallet shuttle. It drives along one level, reaches into a lane to pick up or set down a pallet and charges at the dock. 1.8 m/s empty, 1.4 m/s loaded."),
+        new("lift", "VTU", "A vertical lift at the end of the rack. It carries one Taxi at a time between levels, loaded or empty, at up to 1.2 m/s.", "info"),
+        new("conveyor", "Conveyors", "The infeed brings pallets from goods-in to the rack. The outfeed takes them to docks 1 to 3. Both run at 0.18 m/s.", "info"),
+        new("layers", "Lanes", "6 levels × 18 bays, each lane six pallets deep: 648 places. A lane holds one batch, so the oldest best-before always leaves first.", "neutral"),
+        new("shield", "Profile check", "At the start of the infeed. Pallets that are too tall, too heavy or have no readable label go to the reject area until someone fixes them.", "warn"),
+        new("dock", "Docks", "Three docks with a truck each. Every outbound order names the dock its pallets go to.", "neutral"),
+    ];
+
+    private static readonly Item[] Inbound =
+    [
+        new("pallet", "Goods-in", "A supplier's pallet arrives for an inbound order."),
+        new("shield", "Profile check", "Height, weight and label are checked. A failed pallet goes to the reject area."),
+        new("conveyor", "Infeed", "The pallet rides to the rack end of the conveyor."),
+        new("taxi", "Taxi", "Picks it up, rides a VTU if it needs another level, and sets it down."),
+        new("layers", "Lane", "Stored with its batch. Fast movers go near the VTUs."),
+    ];
+
+    private static readonly Item[] Outbound =
+    [
+        new("orders", "Order", "An outbound order asks for pallets of a product."),
+        new("layers", "Lane", "The oldest best-before in store is chosen first."),
+        new("taxi", "Taxi", "Picks it from the lane and brings it to the outfeed."),
+        new("conveyor", "Outfeed", "The pallet rides to the docks."),
+        new("dock", "Dock", "It is loaded on the truck for that order."),
+    ];
+
+    private static readonly (string Name, string Text)[] Panels =
+    [
+        ("Top bar", "System status (click it to jump to a stop), site time, demo speed, shift score, on-time stars, alarms and the store temperature."),
+        ("Left", "Open orders with their due time and progress, suggestions and goals. Click an order to light up its product in the rack."),
+        ("Right", "Whatever you clicked, with its actions. The tools beside it colour lanes, find a product, hide labels, switch to the flat 2D drawing or go full screen."),
+        ("Bottom", "What the colours mean, the camera buttons and the alerts that need you, each with its fix button."),
+    ];
+
+    private static readonly (string Key, string Text)[] Pointer =
+    [
+        ("Click", "Open a Taxi, VTU, conveyor, lane or ! on the right"),
+        ("Point", "Show a short summary, such as how full a lane is"),
+        ("Drag", "Move the camera across the store"),
+        ("Scroll", "Zoom in or out towards the pointer"),
+        ("Pinch", "Zoom on a touch screen; two fingers move"),
+    ];
+
+    private static readonly (string[] Keys, string Text)[] Keys =
+    [
+        (["1"], "Whole store"),
+        (["2"], "Rack face and aisles"),
+        (["3"], "VTUs, conveyors and the reject area"),
+        (["+", "−"], "Zoom in and out"),
+        (["←", "→", "↑", "↓"], "Move the camera"),
+        (["F"], "Focus mode: full screen, no sidebar"),
+        (["⌘", "K"], "Search pallets, orders, products and machines"),
+        (["?"], "Help for the page you are on"),
+    ];
+
+    private static readonly Item[] Actions =
+    [
+        new("bolt", "Send to charge", "The Taxi finishes its job, then charges to 95% before it takes new work.", "ok"),
+        new("pause", "Take out of service", "The Taxi parks at the dock and gets no new jobs. Use it before maintenance.", "neutral"),
+        new("reset", "Reset after a stop", "Only once the area is clear. If nobody does it within four minutes, remote support resets it after a camera check.", "crit"),
+        new("wrench", "Re-induct a rejected pallet", "Once it is restacked, re-wrapped or relabelled, it goes back on the infeed and is checked again.", "warn"),
+        new("orders", "Change an order", "Raise its priority, cancel it, or create a new inbound or outbound order with a live free-stock check.", "info"),
+        new("spark", "Accept a suggestion", "Rush a nearly due order, unblock a short one, clear stock near its best-before or restock a fast mover.", "gold"),
+    ];
+
+    private static readonly (string What, string Points)[] Points =
+    [
+        ("Pallet stored", "+10"),
+        ("Pallet sent to a dock", "+15"),
+        ("Order finished on time", "+50"),
+        ("Stop fixed by you", "+25"),
+        ("… within a minute", "+25"),
+        ("Order finished late", "−25"),
+        ("Stop left for remote support", "−40"),
+        ("Rejected pallet returned to the supplier", "−30"),
+    ];
+
+    private static readonly PageLink[] Pages =
+    [
+        new("", "overview", "Overview", "The shift, system status, KPIs, storage and everything that needs you"),
+        new("live", "live", "Live system", "The store in 3D with every machine, order and alert"),
+        new("fleet", "taxi", "Fleet", "Every Taxi, VTU and conveyor, with its battery, level and route"),
+        new("orders", "orders", "Orders", "ERP orders and your own: priority, cancel, create"),
+        new("inventory", "inventory", "Inventory", "Products, their pallets and each pallet's history"),
+        new("alarms", "alarm", "Alarms", "What happened, why, and the steps to fix it"),
+        new("insights", "insights", "Insights", "AI-assisted features planned for the next phase"),
+    ];
+
+    private static readonly (string Word, string Meaning)[] Words =
+    [
+        ("WCS", "Warehouse control system: the software that tells the machines what to do, as opposed to the business system (ERP) that decides what is ordered."),
+        ("Taxi", "The pallet shuttle that drives the aisles. Each one has its own battery."),
+        ("VTU", "Vertical transfer unit: the lift that moves Taxis between levels."),
+        ("Lane", "One storage channel, six pallets deep. Named by level and bay, such as L2·B05."),
+        ("Putaway", "Taking a pallet into store."),
+        ("Retrieval", "Taking a pallet out of store."),
+        ("FEFO", "First expired, first out: the oldest best-before date leaves first."),
+        ("Re-induct", "Putting a rejected pallet back on the infeed after it has been fixed."),
+        ("Velocity", "How often a product moves: A fast, B medium, C slow."),
+    ];
+}

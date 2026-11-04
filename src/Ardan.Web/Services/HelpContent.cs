@@ -16,15 +16,16 @@ public static class HelpContent
     {
         "live" => new(
             "Live system",
-            "The whole store in 3D, run like a game: keep the work flowing, fix stops fast and the shift scores points.",
+            "The whole store in 3D: keep the work flowing, fix stops fast and the shift scores points.",
             [
-                "Drag to turn, right-drag or Shift + drag to move, scroll to zoom. On a touch screen one finger turns and two fingers move and zoom. Q and E turn, 0 shows the whole store, F is focus mode.",
+                "Drag to move the camera and scroll to zoom. 1, 2 and 3 (or the buttons at the bottom) show the whole store, the rack face and the VTUs. The lock keeps the camera still. F is focus mode.",
                 "Green arrows lead a Taxi into store and blue arrows out of store. A frame marks the place it is going to.",
                 "Click a Taxi, VTU, conveyor or lane to see it on the right with its actions. A red ! marks a machine that needs you: hover it to see what happened.",
                 "Points: 10 per pallet stored, 15 per pallet sent, 50 per order on time, 25 for each stop you fix. Late orders and stops left for remote support cost points.",
                 "Stars follow how many of the last 20 orders finished on time. Goals pay a reward and come back harder.",
-                "Offers suggest work worth doing now. Nothing changes until you accept one.",
+                "Suggestions on the left are work worth doing now. Nothing changes until you accept one.",
                 "2D in the right-hand toolbar shows the flat rack drawing. The layers button colours lanes and finds a product.",
+                "The Guide page explains every part of the store and every control.",
             ]),
         "fleet" => new(
             "Fleet",
@@ -61,6 +62,13 @@ public static class HelpContent
                 "Warnings like low battery or weak Wi-Fi clear by themselves.",
                 "If nobody resets a stopped machine within four minutes, remote support checks the camera and resets it.",
             ]),
+        "guide" => new(
+            "Guide",
+            "How the store works and how to use this console, in one page.",
+            [
+                "Jump to a section from the list on the left.",
+                "Every other page has its own short help too: press ? anywhere.",
+            ]),
         "insights" => new(
             "Insights",
             "Planned features for the next phase. Nothing on this page acts on the store yet.",
@@ -75,7 +83,7 @@ public static class HelpContent
                 "The top row is this shift: points, level, stars and the next goals, next to the state of the system.",
                 "Hover any ⓘ to see what a number means and how it is counted.",
                 "The fleet shows each Taxi with its battery ring and each VTU with its level. Click one to open it in Fleet.",
-                "Needs attention lists alarms with the first thing to do and the fix button. Offers suggest work worth doing now.",
+                "Needs attention lists alarms with the first thing to do and the fix button. Suggestions are work worth doing now.",
                 "Use the search box, or press ⌘K, to find any pallet, order, product or machine.",
             ]),
     };

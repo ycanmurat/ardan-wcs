@@ -1,4 +1,4 @@
-<section class="hud-panel hud-board @(_collapsed ? "is-collapsed" : null)" aria-label="Jobs, offers and goals">
+<section class="hud-panel hud-board @(_collapsed ? "is-collapsed" : null)" aria-label="Orders, suggestions and goals">
     <header class="hud-tabs" role="tablist">
         @foreach (var (key, label, count, tone) in Tabs)
         {
@@ -25,7 +25,7 @@
                 case "offers":
                     if (Offers.Count == 0)
                     {
-                        <EmptyState Icon="spark" Tone="neutral" Title="No offers right now" Text="Offers appear when stock runs low, an order is short, stock nears its best-before date or an order is close to its due time." />
+                        <EmptyState Icon="spark" Tone="neutral" Title="No suggestions right now" Text="Suggestions appear when stock runs low, an order is short, stock nears its best-before date or an order is close to its due time." />
                     }
                     else
                     {
@@ -51,7 +51,7 @@
                 default:
                     if (Orders.Count == 0)
                     {
-                        <EmptyState Icon="orders" Tone="neutral" Title="No open orders" Text="New work arrives from the ERP every minute or so. Accept an offer to add your own." />
+                        <EmptyState Icon="orders" Tone="neutral" Title="No open orders" Text="New work arrives from the ERP every minute or so. Accept a suggestion to add your own." />
                     }
                     else
                     {
@@ -115,8 +115,8 @@
 
     private IEnumerable<(string Key, string Label, int Count, string Tone)> Tabs =>
     [
-        ("jobs", "Jobs", Orders.Count, Orders.Any(order => order.DueAt < Now) ? "crit" : "neutral"),
-        ("offers", "Offers", Offers.Count, "gold"),
+        ("jobs", "Orders", Orders.Count, Orders.Any(order => order.DueAt < Now) ? "crit" : "neutral"),
+        ("offers", "Suggestions", Offers.Count, "gold"),
         ("goals", "Goals", 0, "neutral"),
     ];
 

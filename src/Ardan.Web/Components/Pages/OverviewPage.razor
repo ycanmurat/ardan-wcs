@@ -28,17 +28,6 @@ else
                     <span class="shift-points">
                         <strong>@Display.Count(shift.Points)</strong>
                         <span>points</span>
-                        @if (Display.Rate(shift, live.Time) is { } rate)
-                        {
-                            <small>@rate</small>
-                        }
-                    </span>
-                </Tip>
-                <Tip Title="@($"Level {shift.Level}")" Text="@Display.LevelHelp(shift)" Side="bottom" Class="shift-level-tip">
-                    <span class="shift-level">
-                        <span class="shift-badge">Lv @shift.Level</span>
-                        <span class="shift-xp"><i style="width: @Display.Num(Display.LevelShare(shift) * 100, "0.#")%"></i></span>
-                        <span class="shift-xp-text">@Display.Count(shift.LevelTo - shift.Earned) to Lv @(shift.Level + 1)</span>
                     </span>
                 </Tip>
                 <Tip Title="Service rating" Text="@Display.RatingHelp(shift)" Side="bottom">
@@ -232,10 +221,10 @@ else
         </section>
 
         <section class="card">
-            <CardHeader Title="Offers" Help="Work worth doing now: rush an order that is nearly due, unblock a short order, clear stock near its best-before date or restock a fast mover. Each pays points when it is done on time." />
+            <CardHeader Title="Suggestions" Help="Work worth doing now: rush an order that is nearly due, unblock a short order, clear stock near its best-before date or restock a fast mover. Each pays points when it is done on time." />
             @if (offers.Count == 0)
             {
-                <EmptyState Icon="spark" Tone="neutral" Title="No offers right now" Text="Offers appear when stock runs low, an order is short, stock nears its best-before date or an order is close to its due time." />
+                <EmptyState Icon="spark" Tone="neutral" Title="No suggestions right now" Text="Suggestions appear when stock runs low, an order is short, stock nears its best-before date or an order is close to its due time." />
             }
             else
             {
