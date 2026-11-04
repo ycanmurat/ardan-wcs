@@ -14,6 +14,7 @@ public sealed partial class Warehouse
         foreach (var item in Infeed.Items.Where(item => !item.Checked && item.Position >= Motion.ProfileCheckAt).ToList())
             CheckProfile(item);
 
+        InductFixed();
         _nextArrivalIn -= seconds;
         if (_nextArrivalIn > 0 || !Infeed.EntryClear) return;
 
@@ -26,6 +27,16 @@ public sealed partial class Warehouse
 
         Arrive(order);
         _nextArrivalIn = 10 + _random.NextDouble() * 10;
+    }
+
+    // Fixed pallets from the reject lane go back on the infeed first, one at a time, whenever its entry is clear.
+    private void InductFixed()
+    {
+        if (_reinducts.Count == 0 || !Infeed.EntryClear) return;
+        var pallet = _reinducts.Dequeue();
+        pallet.Status = PalletStatus.Arriving;
+        Infeed.Add(pallet);
+        _journal.PalletChanged(pallet);
     }
 
     private void Arrive(Order order)

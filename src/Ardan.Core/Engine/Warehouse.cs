@@ -38,6 +38,7 @@ public sealed partial class Warehouse
     private int _jobNumber;
     private double _nextOrderIn = 25;
     private double _nextArrivalIn = 3;
+    private readonly Queue<Pallet> _reinducts = new();
 
     public Warehouse(
         SiteLayout layout,

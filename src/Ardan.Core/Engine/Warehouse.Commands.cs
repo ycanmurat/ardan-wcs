@@ -171,18 +171,16 @@ public sealed partial class Warehouse
 
     public CommandResult Reinduct(string palletId)
     {
-        if (!_pallets.TryGetValue(palletId, out var pallet) || pallet.Status != PalletStatus.Rejected)
+        if (!_pallets.TryGetValue(palletId, out var pallet) || pallet.Status != PalletStatus.Rejected || _reinducts.Contains(pallet))
             return CommandResult.Failure($"Pallet {palletId} is not waiting in the reject lane.");
-        if (!Infeed.EntryClear)
-            return CommandResult.Failure("The infeed is busy. Try again in a few seconds.");
 
         pallet.HeightMm = Math.Min(pallet.HeightMm, 1700);
         pallet.WeightKg = Math.Min(pallet.WeightKg, 1450);
         pallet.LabelReadable = true;
-        pallet.Status = PalletStatus.Arriving;
         pallet.RejectedAt = null;
-        Infeed.Add(pallet);
-        _journal.PalletChanged(pallet);
+        _reinducts.Enqueue(pallet);
+        var waits = !Infeed.EntryClear;
+        InductFixed();
 
         foreach (var alarm in Alarms.Active.Where(alarm => alarm.Subject == pallet.Id).ToList())
             Alarms.Clear(alarm, Now, Operator);
@@ -200,7 +198,9 @@ public sealed partial class Warehouse
 
         _journal.Moved(new Movement(pallet.Id, Now, MovementKind.Reinducted, "Reject lane", "Infeed", Operator));
         Events.Add(Now, EventKind.Info, $"{pallet.Id} re-inducted after a fix", pallet.Id);
-        return CommandResult.Success($"{pallet.Id} is back on the infeed. It is checked again before it goes into store.");
+        return CommandResult.Success(waits
+            ? $"{pallet.Id} is fixed and goes back on the infeed as soon as the entry is clear. It is checked again before it goes into store."
+            : $"{pallet.Id} is back on the infeed. It is checked again before it goes into store.");
     }
 
     public CommandResult SetSpeed(double speed)

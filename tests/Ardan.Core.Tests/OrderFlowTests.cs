@@ -110,4 +110,24 @@ public class OrderFlowTests
         Assert.Equal(PalletStatus.Stored, store.Pallets[alarm.Subject!].Status);
         Assert.Empty(store.Alarms.Active);
     }
+
+    [Fact]
+    public void A_fixed_pallet_waits_for_a_busy_infeed_instead_of_being_refused()
+    {
+        var store = TestStore.Create();
+        store.ProfileFaultRate = 1;
+        var order = store.CreateOrder(new NewOrder(OrderType.Inbound, "GF-3001", 2, 1, Priority.Normal, 60)).Ref!;
+        TestStore.Run(store, TimeSpan.FromMinutes(2), () => store.Alarms.Active.Any(alarm => alarm.Action == AlarmAction.Reinduct));
+        store.ProfileFaultRate = 0;
+        TestStore.Run(store, TimeSpan.FromMinutes(1), () => !store.Infeed.EntryClear);
+
+        Assert.False(store.Infeed.EntryClear);
+        var alarm = store.Alarms.Active.First(a => a.Action == AlarmAction.Reinduct);
+        var result = store.RunAlarmAction(alarm.Id);
+
+        Assert.True(result.Ok);
+        Assert.DoesNotContain(store.Alarms.Active, a => a.Id == alarm.Id);
+        TestStore.Run(store, TimeSpan.FromMinutes(10), () => store.FindOrder(order)?.Status == OrderStatus.Completed);
+        Assert.Equal(PalletStatus.Stored, store.Pallets[alarm.Subject!].Status);
+    }
 }
