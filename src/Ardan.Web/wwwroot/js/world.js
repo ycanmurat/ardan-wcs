@@ -71,10 +71,13 @@ class World {
         this.raf = requestAnimationFrame(this.loop);
     }
 
+    // High-density screens are sharp enough without multisampling, which would cost the GPU four times the pixels again.
     createRenderer() {
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        const density = window.devicePixelRatio || 1;
+        this.renderer = new THREE.WebGLRenderer({ antialias: density < 2, powerPreference: "high-performance" });
+        this.renderer.setPixelRatio(Math.min(density, 2));
         this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.autoUpdate = false;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.canvas = this.renderer.domElement;
         this.canvas.className = "world-canvas";
@@ -103,6 +106,10 @@ class World {
         this.scene.add(this.hemi, this.sun, this.sun.target);
 
         Object.assign(this, buildSite({ scene: this.scene, mats: this.mats, site: s, theme: this.theme, renderer: this.renderer }));
+        this.scene.traverse(node => {
+            node.updateMatrix();
+            node.matrixAutoUpdate = false;
+        });
         this.routes = new Routes(this.scene, MAX_TAXIS);
 
         this.hoverFill = new THREE.Mesh(BOX, this.mats.hoverFill);
@@ -841,6 +848,8 @@ class World {
         this.animate(time, seconds);
         this.placeMarkers(time);
         this.placeTags();
+        this.frames = (this.frames ?? 0) + 1;
+        if (this.frames % 2 === 1) this.renderer.shadowMap.needsUpdate = true;
         this.renderer.render(this.scene, this.camera);
         if (moving && this.hoverPoint) this.hoverAt(this.hoverPoint.x, this.hoverPoint.y);
     }

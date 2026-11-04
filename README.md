@@ -11,7 +11,7 @@ Source Code: https://github.com/ycanmurat/ardan-wcs
 The demo site is fictional: Glenmore Foods, a chilled distribution centre in Dundalk. Machine figures
 (speeds, loads, temperatures) follow public data sheets for pallet-shuttle systems. Not affiliated with any vendor.
 
-![The live view in 3D, dark theme: Taxis take pallets out of the rack along blue route arrows, with open orders on the left, camera views at the bottom and the shift score at the top](docs/screenshots/live.png)
+![The live view in 3D, dark theme: Taxi T-05 has stopped in an aisle with a red marker and a reset button in the alert strip, green arrows lead Taxis into store, with open orders on the left, camera views at the bottom and the shift score at the top](docs/screenshots/live.png)
 
 ## What the console does
 
@@ -33,7 +33,7 @@ Light and dark themes follow the system setting and can be switched in the sideb
 
 | Overview | Live system, light theme |
 | --- | --- |
-| ![Overview with the shift score, stars and goals, the system status, KPI cards with a trend line, throughput and storage by level](docs/screenshots/overview.png) | ![The 3D live view in the light theme with Taxi T-01 selected and its battery, job and actions in the side panel](docs/screenshots/live-light.png) |
+| ![Overview with the shift score, stars and goals, the system status, KPI cards with a trend line, throughput and storage by level](docs/screenshots/overview.png) | ![The 3D live view in the light theme with Taxi T-03 selected and its load, job and actions in the side panel](docs/screenshots/live-light.png) |
 | **Fleet** | **Alarms** |
 | ![Fleet with a card per Taxi showing its battery, level and route, and the panel of a stopped Taxi with its fault, the remote support fallback and a reset button](docs/screenshots/fleet.png) | ![Alarms with counts at the top and a critical alarm with what happened, the likely cause, numbered steps and action buttons](docs/screenshots/alarms.png) |
 | **New order** | **Inventory** |
